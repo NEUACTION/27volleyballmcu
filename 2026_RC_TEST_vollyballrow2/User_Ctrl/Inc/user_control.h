@@ -55,14 +55,15 @@ extern "C" {
 // #define GAP_TIME (43)//highdown
 #define GAP_TIME (30)//highdown117
 #define GAP_TIME2 (30)//low118A
-#define GAP_TIME3 (30)//low118B
+// #define GAP_TIME118B (19)//low118B
+#define GAP_TIME118B (23)//low118B
 
 #define STARTHIGH (-1.75f)
 #define STARTHIGHDOWN (-2.0f)//2.0
 #define STARTLOW (1.5f)
 #define STARTLOWUP (1.75f)
-#define STARTLOW118A (1.5f)
-#define STARTLOW118B (1.5f)
+#define STARTLOW118A (-1.5f)
+#define STARTLOW118B (-1.6f)
 
 
 

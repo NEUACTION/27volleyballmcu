@@ -48,7 +48,7 @@ typedef struct {
     float get_platevel_low118b(float r);
     void get_rowpos_low118b(void);
     float pos_row_low118b(void);
-    
+
     float get_platevel_low118a(float r);
     void get_rowpos_low118a(void);
     float pos_row_low118a(void);

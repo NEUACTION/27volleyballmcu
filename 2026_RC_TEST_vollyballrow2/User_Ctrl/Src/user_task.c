@@ -316,7 +316,7 @@
 			static bool out_flag = false;
 			// User_Control_GetDriverMsgsSnapshot(&driverMsgs);
 			
-			// DEBUG(" %d\r\n", ps_num[1]);
+			// DEBUG(" %f\r\n", (float)plateTar.vel);
 			if(!out_flag)
 			{
 				static bool mode_flag = 0;
@@ -345,8 +345,10 @@
 				}
 				
 			}
-			// User_Control_GetDriverMsgsSnapshot(&driverMsgs);
-			// DEBUG("%f %f %f\r\n", (float)slideTar.pos, (float)slideMsg.pos / 4096.f, (float)slideMsg.vel / 4096.f);
+			#if TEST == 0
+				User_Control_GetDriverMsgsSnapshot(&driverMsgs);
+				DEBUG("%f %f %f\r\n", (float)slideTar.pos, (float)slideMsg.pos / 4096.f, (float)slideMsg.vel / 4096.f);
+			#endif
 			if(!reset_flag)
 			{	
 				#if TEST == 0 
@@ -388,6 +390,7 @@
 			#if TEST == 0
 				slideTar.pos = get_slidepos_high();
 				PosCtrl(&hfdcan3, PTP_MODE, SLIDE, slideTar.pos*4096.f, 1.0f*1000.f*60, 0.05*100.0f);
+
 			#endif
 			
 
@@ -643,7 +646,9 @@
 		// float tarpos = 241.16f;
 		// float tarpos = 308.4f;
 		// float tarpos = 73.6f;
-		float tarpos = 343.4f;
+		// float tarpos = 343.4f;
+		// float tarpos = 817.5f;
+		float tarpos = 806.88f;
 
 		pos = pos + 35.0f/200.0f;//1秒35转
 		if(pos > tarpos)
@@ -766,8 +771,9 @@
 	float get_platevel_low(float r)
 	{
 	//41 1500 1500
-		float tarvel = 11.2f;//期望转速 r/s
-		float a1 = 200.0f;//加速
+		float tarvel = 10.6f;//期望转速 r/s
+		// float tarvel = 11.2f;//期望转速 r/s
+		float a1 = 200.0f;//加速9.0f
 		float a2 = 200.0f;//减速
 		if(r <= 0.0f)
 		{
@@ -1223,13 +1229,14 @@
 			vTaskDelayUntil(&last_wake, period);
 			Beep_Control();
 			User_Control_GetDriverMsgsSnapshot(&driverMsgs);
-			DEBUG("%d \r\n",ps_num[3]);
+			// DEBUG(":%d \r\n",ps_num[3]);
 
 			/* 这里写每 5ms 需要执行的逻辑 */
 			
 
 			//心跳包自增
-			static int mode = HIGHDOWN117;//发球方式
+			static int mode = LOW118B;//发球方式
+			// static int mode = HIGHDOWN117;//发球方式
 
 			static bool reset_flag = false; 
 			static bool out_flag = false;
@@ -1280,8 +1287,11 @@
 			static bool start = 0;
 			static int cnt_start = 0;
 			static bool start_arm = false;
+			// DEBUG(" %d \r\n",ps_num[3]);
 			if(!start && pos_ok)
 			{
+				
+				// DEBUG("x %d \r\n",ps_num[3]);
 				if(ps_num[3] == 0)
 				{
 					cnt_start++;
@@ -1295,6 +1305,7 @@
 					cnt_start = 1001;
 					SetBeep(400);
 					start = 1;
+					
 				}
 			}
 			else if (start && pos_ok)
@@ -1313,8 +1324,9 @@
 				else
 				{
 					platecrl(mode);
+					// arm_pos2(mode);
 					start_arm = true;
-					DEBUG("%d %d %d %f %f \r\n",ps_num[0], ps_num[1], ps_num[2], armTar1.pos, armMsg1.pos/4096.f,armMsg2.pos/4096.f);
+					
 				}
 				
 				
@@ -1328,27 +1340,28 @@
 			if(start_arm)
 			{
 				static int cnt_waiting = 0;
-				if(cnt_waiting < GAP_TIME && !start1)
+				if(cnt_waiting < GAP_TIME118B && !start1)
 				{
 					cnt_waiting++;
 				}
 				else
 				{
-					cnt_waiting = GAP_TIME + 1;
+					cnt_waiting = GAP_TIME118B+ 1;
 					start1 = 1;
 				}
 				if(start1)
 				{
 					arm_pos2(mode);
+					// platecrl(mode);
 				}
 					
 			}
 			
 			//test();
 			/* 获取驱动器最新消息 */
-			User_Control_GetDriverMsgsSnapshot(&driverMsgs);
-			
-			//DEBUG("%f %f %f %f %f\r\n", (float)armTar1.pos, (float)driverMsgs.armMsg1.pos / 4096.f, (float)-driverMsgs.armMsg2.pos / 4096.f,(float)driverMsgs.armMsg1.currQ ,(float)driverMsgs.armMsg2.currQ);	
+			// User_Control_GetDriverMsgsSnapshot(&driverMsgs);
+			DEBUG(" %d \r\n",ps_num[1]);
+			// DEBUG("%f %f %f %f %f %f %f %f\r\n", (float)armTar1.pos, (float)driverMsgs.armMsg1.pos / 4096.f, (float)-driverMsgs.armMsg2.pos / 4096.f,(float)driverMsgs.armMsg1.currQ ,(float)driverMsgs.armMsg2.currQ, (float)plateTar.vel,(float)plateMsg.pos / 4096.f,(float)plateMsg.vel / 4096.f);	
 			//DEBUG("%f %f %f\r\n",(float)plateTar.vel,(float)plateMsg.pos / 4096.f,(float)plateMsg.vel / 4096.f);
 			//DEBUG("%f %f %f\r\n", (float)slideTar.pos, (float)slideMsg.pos / 4096.f, (float)slideMsg.vel / 4096.f);
 		}
@@ -1577,7 +1590,8 @@
 
 	float pos_row_highdown117(void)
 	{
-		const float tarvel = 60.0f;   // 速度 r/s
+		// const float tarvel = 60.0f;   // 速度 r/s
+		const float tarvel = 20.0f;   // 速度 r/s
 		const float s1     = 4.3f;   // 加速段行程 r
 		const float s2     = 1.80f;   // 匀速段行程 r
 		const float dt     = 0.005f; // 调用周期 5 ms                   
@@ -1635,7 +1649,7 @@
 	
 	float pos_row_low118a(void)
 	{
-		const float tarvel = 50.0f;   // 速度 r/s
+		const float tarvel = 20.0f;   // 速度 r/s
 		const float s1     = 4.3f;   // 加速段行程 r
 		const float s2     = 1.80f;   // 匀速段行程 r
 		const float dt     = 0.005f; // 调用周期 5 ms                   
@@ -1693,7 +1707,8 @@
 
 	float pos_row_low118b(void)
 	{
-		const float tarvel = 60.0f;   // 速度 r/s
+		// const float tarvel = 50.0f;   //1速度 r/s
+		const float tarvel = 57.0f;   //1速度 r/s
 		const float s1     = 4.3f;   // 加速段行程 r
 		const float s2     = 1.80f;   // 匀速段行程 r
 		const float dt     = 0.005f; // 调用周期 5 ms                   
@@ -1764,7 +1779,7 @@
 				get_rowpos_high();
 				static int cnt_z = 0;
 				/* driverMsgs.row1.pos 是 1/4096 圈的原始脉冲值，先换算成圈再判到位 */
-				if(user_abs(driverMsgs.armMsg1.pos / 4096.f + 1.75f) <= 0.02f)
+				if(user_abs(driverMsgs.armMsg1.pos / 4096.f - STARTHIGH) <= 0.02f)
 				{
 					cnt_z++;
 					if(cnt_z >= 200)
@@ -1783,7 +1798,7 @@
 				get_rowpos_highdown();
 				static int cnt_z = 0;
 				/* driverMsgs.row1.pos 是 1/4096 圈的原始脉冲值，先换算成圈再判到位 */
-				if(user_abs(driverMsgs.armMsg1.pos / 4096.f + 2.0f) <= 0.02f)
+				if(user_abs(driverMsgs.armMsg1.pos / 4096.f - STARTHIGHDOWN) <= 0.02f)
 				{
 					cnt_z++;
 					if(cnt_z >= 200)
@@ -1802,7 +1817,7 @@
 				get_rowpos_highdown117();
 				static int cnt_z = 0;
 				/* driverMsgs.row1.pos 是 1/4096 圈的原始脉冲值，先换算成圈再判到位 */
-				if(user_abs(driverMsgs.armMsg1.pos / 4096.f + 2.0f) <= 0.02f)
+				if(user_abs(driverMsgs.armMsg1.pos / 4096.f - STARTHIGHDOWN) <= 0.02f)
 				{
 					cnt_z++;
 					if(cnt_z >= 200)
@@ -1821,7 +1836,7 @@
 				get_rowpos_low118a();
 				static int cnt_z = 0;
 				/* driverMsgs.row1.pos 是 1/4096 圈的原始脉冲值，先换算成圈再判到位 */
-				if(user_abs(driverMsgs.armMsg1.pos / 4096.f + STARTLOW118A) <= 0.02f)
+				if(user_abs(driverMsgs.armMsg1.pos / 4096.f - STARTLOW118A) <= 0.02f)
 				{
 					cnt_z++;
 					if(cnt_z >= 200)
@@ -1840,7 +1855,7 @@
 				get_rowpos_low118b();
 				static int cnt_z = 0;
 				/* driverMsgs.row1.pos 是 1/4096 圈的原始脉冲值，先换算成圈再判到位 */
-				if(user_abs(driverMsgs.armMsg1.pos / 4096.f + STARTLOW118B) <= 0.02f)
+				if(user_abs(driverMsgs.armMsg1.pos / 4096.f - STARTLOW118B) <= 0.02f)
 				{
 					cnt_z++;
 					if(cnt_z >= 200)
@@ -1883,13 +1898,13 @@
 				armTar2.pos = -STARTHIGHDOWN - Ssum - 0.009f;
 				break;
 			case LOW118A:
-				armTar1.pos = STARTLOW118A + Ssum;
-				armTar2.pos = -STARTLOW118A - Ssum;
+				armTar1.pos = STARTLOW118A - Ssum;
+				armTar2.pos = -STARTLOW118A + Ssum;
 				break;
 				
 			case LOW118B:
-				armTar1.pos = STARTLOW118B + Ssum;
-				armTar2.pos = -STARTLOW118B - Ssum;
+				armTar1.pos = STARTLOW118B - Ssum;
+				armTar2.pos = -STARTLOW118B + Ssum;
 				break;
 				
 			default:
@@ -2297,7 +2312,63 @@
 
 	float get_platevel_low118b(float r)
 	{
-		return 0.0f;
+	//41 1500 1500
+		// float tarvel = 9.2f;//1期望转速 r/s
+		float tarvel = 7.6f;//期望转速 r/s
+		// float tarvel = 10.5f;//2期望转速 r/s
+		float a1 = 200.0f;//加速
+		float a2 = 200.0f;//减速
+		if(r <= 0.0f)
+		{
+			r = 0.0f;
+		}
+		if(r <= 1.60f)
+		{
+			plateTar.vel_kp = 1.8f*1000.f;
+			plateTar.vel_ki = 0.5f*1000.f;
+			if(r>=0.6f)
+			{
+				plateTar.vel_kp = 1.8f*1000.f;
+				plateTar.vel_ki = 0.2f*1000.f;
+			}
+			if(sqrt(2 * r * a1) < 0.3f)
+				return 0.3f;  // 返回0.3，表示速度接近于0，给一个小速度
+			if(sqrt(2 * r * a1) < tarvel)
+				return sqrt(2 * r * a1);  // 返回计算值
+			else 
+				return tarvel;        // 返回目标速度
+		}
+		if(r > 1.60f && r <= 1.70f)
+		{
+			plateTar.vel_kp = 1.8f*1000.f;
+			return tarvel;
+		}
+		if(r>1.70f && r <= 2.95f)
+		{
+			plateTar.vel_kp = 2.5f*1000.f;
+			plateTar.vel_ki = 0.0f*1000.f;
+			// 计算基于加速度a2的速度，判断是否接近于0
+			if(tarvel * tarvel - 2 * a2 * (r - 1.70f) < 0.f)
+			{
+				return 0.0f;  // 返回0，表示速度接近于0
+			}
+			if(sqrt(tarvel * tarvel - 2 * a2 * (r - 1.70f)) < 0.0001f)
+			{
+				return 0.0f;  // 返回0，表示速度接近于0
+			}
+			else
+			{
+				// 返回计算得到的速度值
+				return sqrt(tarvel * tarvel-2 * a2 * (r - 1.70f));
+			}
+			
+		}
+		if(r > 2.95f)
+		{
+			plateTar.vel_ki = 1.0f*1000.f;
+			return 0.0f;
+		}
+		
 	}
 	
 	float get_platevel_low(float r)
