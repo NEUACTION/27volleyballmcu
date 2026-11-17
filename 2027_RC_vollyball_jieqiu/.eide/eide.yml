@@ -1,0 +1,98 @@
+version: "4.1"
+name: 2026_RC_TEST
+type: ARM
+deviceName: STM32H723VGTx
+packDir: .pack/Keil/STM32H7xx_DFP.4.1.0
+srcDirs:
+  - Core
+  - Drivers
+  - Middlewares
+  - ld
+  - USB_DEVICE
+  - User_Ctrl
+  - User_Driver
+  - Vofa
+virtualFolder:
+  name: <virtual_root>
+  files: []
+  folders: []
+dependenceList: []
+outDir: build
+miscInfo:
+  uid: 347daa481404bbaf1f5e6719f465fd47
+targets:
+  Debug:
+    cppPreprocessAttrs:
+      defineList:
+        - STM32H723xx
+        - USE_HAL_DRIVER
+      incList:
+        - .
+        - Core/Inc
+        - Drivers/CMSIS/Include
+        - Drivers/STM32H7xx_HAL_Driver/Inc
+        - Drivers/STM32H7xx_HAL_Driver/Inc/Legacy
+        - Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Inc
+        - Middlewares/ST/STM32_USB_Device_Library/Core/Inc
+        - USB_DEVICE/App
+        - USB_DEVICE/Target
+        - Drivers/CMSIS/Device/ST/STM32H7xx/Include
+        - Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2
+        - Middlewares/Third_Party/FreeRTOS/Source/include
+        - Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F
+        - User_Ctrl/Inc
+        - User_Driver/Inc
+        - Vofa
+        - Drivers/CMSIS/RTOS2/Include
+      libList: []
+    excludeList: []
+    settings:
+      debugger: cortex-debug
+    toolchain: GCC
+    toolchainConfigMap:
+      GCC:
+        archExtensions: ""
+        cpuType: Cortex-M7
+        floatingPointHardware: double
+        options:
+          version: 5
+          afterBuildTasks: []
+          asm-compiler: {}
+          beforeBuildTasks: []
+          c/cpp-compiler:
+            language-c: c11
+            language-cpp: c++17
+            one-elf-section-per-data: true
+            one-elf-section-per-function: true
+            optimization: level-debug
+            warnings: all-warnings
+          global:
+            $float-abi-type: hard
+            arm-thumb-mode: thumb
+            not-use-syscalls: true
+            output-debug-info: enable
+            use-newlib-nano: true
+          linker:
+            $outputTaskExcludes:
+              - .bin
+            $toolName: auto
+            LIB_FLAGS: -lm
+            output-format: elf
+            remove-unused-input-sections: true
+            use-float-printf: true
+        scatterFilePath: ld/STM32H723VGTx_FLASH.ld
+        storageLayout:
+          RAM: []
+          ROM: []
+        useCustomScatterFile: true
+    uploadConfigMap:
+      JLink:
+        baseAddr: ""
+        bin: build/Debug/2026_RC_TEST.hex
+        cpuInfo:
+          cpuName: STM32H723VG
+          vendor: ST
+        otherCmds: ""
+        proType: 1
+        speed: 8000
+    uploader: JLink
