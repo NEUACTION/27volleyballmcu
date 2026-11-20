@@ -270,7 +270,7 @@ void DriverControl(FDCAN_HandleTypeDef *hfdcan, uint32_t driverNum, motorTarget_
             }
             case 1:
             {
-                // if (driverMsg->enableState == 0)
+                // if (driverMsg->enableState == 0)//AsK
                 // {
                 //     SetDriverState(hfdcan, PTP_MODE, driverNum, ENABLE);
                 // }
@@ -289,13 +289,13 @@ void DriverControl(FDCAN_HandleTypeDef *hfdcan, uint32_t driverNum, motorTarget_
                 // }
                 if (driverTarget->vel_kp != driverTarget->last_vel_kp || driverTarget->vel_ki != driverTarget->last_vel_ki)
                 {
-                    SetVelKpKi(hfdcan, PTP_MODE, driverNum, driverTarget->vel_kp, driverTarget->vel_ki, driverTarget->clean);
+                    SetVelKpKi(hfdcan, PTP_MODE, driverNum, driverTarget->vel_kp, driverTarget->vel_ki, driverTarget->clean);//AsK
                     driverTarget->last_vel_kp = driverTarget->vel_kp;
                     driverTarget->last_vel_ki = driverTarget->vel_ki;
                 }
                 else
                 {
-                    VelCtrl(hfdcan, PTP_MODE, driverNum, (int32_t)(driverTarget->vel * 4096.f), driverTarget->tor, driverTarget->clean);
+                    VelCtrl(hfdcan, PTP_MODE, driverNum, (int32_t)(driverTarget->vel * 4096.f), driverTarget->tor, driverTarget->clean);//AsK
                 }
                 break;
             }
@@ -362,7 +362,7 @@ void HB_Add(void)
     if(HB.elbow <= 200)HB.elbow ++;
     if(HB.wrist <= 200)HB.wrist ++;
 	if(HB.PC <= 200)HB.PC ++;
-    if(HB.op <= 200)HB.op ++;
+    if(HB.op <= 200)HB.op ++;//AsK
 }
 
 /**

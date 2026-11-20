@@ -36,8 +36,6 @@ extern uint8_t valve_num[VALVE_TX_LEN - 4];
 #define PS_UART			huart7
 /* 宏：光电传感器接收帧长度，当前为 20 字节（帧头 2 + 数据 16 + 帧尾 2）。 */
 #define PS_RX_LEN 	    20
-/* 宏：光电传感器发送帧长度，当前为 20 字节。 */
-#define PS_TX_LEN       20
 /* 外部变量：UART7 光电传感器解析结果，共 16 项；接收回调和 GetPSNum 可更新。 */
 extern uint8_t ps_num[PS_RX_LEN - 4];
 /* 外部变量：UART7 光电传感器接收帧；中断逐字节写入，当前接收模式已启用。 */

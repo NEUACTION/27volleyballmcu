@@ -325,7 +325,9 @@ void User_Task(void *argument)
 		/* 这里写每 5ms 需要执行的逻辑 */
 
 		// 心跳包自增
-		//HB_Add();
+		// HB_Add();
+		static int cntTest = 0;
+		cntTest++;
 
 		// if(gRobot.runSucceedFlag)
 		// {
@@ -391,7 +393,7 @@ void User_Task(void *argument)
 			
 			tarVel = (lastTarPos1 - leg1Tar.pos) / 0.005;
 			lastTarPos1 = leg1Tar.pos;
-			DEBUG("%f  %f %f %f %f %f %f %f %f %f %f %f %f %f %d %d %d %d\r\n" , -leg1Tar.pos,
+			DEBUG("%d %f  %f %f %f %f %f %f %f %f %f %f %f %f %f %d %d %d %d\r\n" , cntTest, -leg1Tar.pos,
 				 -leg1Msg.pos, leg2Msg.pos, -leg3Msg.pos, leg4Msg.pos,
 				  tarVel,-leg1Msg.vel, leg2Msg.vel, -leg3Msg.vel,
 				   leg4Msg.vel, leg1Msg.currQ, leg2Msg.currQ, leg3Msg.currQ, leg4Msg.currQ,
@@ -784,7 +786,7 @@ void getHitPos()
 }
 
 /* 函数：按角度域规划计算速度与 MIT 增益；该同名定义与前一函数冲突，当前调用状态不确定。 */
-void getHitPos()
+void getHitPosPVT()
 {
 	static float pos = 0.0f;
 	static float vel = 0.0f;

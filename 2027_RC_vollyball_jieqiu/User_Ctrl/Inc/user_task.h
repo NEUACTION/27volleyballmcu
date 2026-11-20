@@ -21,8 +21,10 @@ void User_Task_Init(void);
 void User_Task(void *argument);
 /* 函数声明：旧命名的梯形命中位置规划接口；实现保留，当前任务未调用。 */
 void gethit_pos(void);
-/* 函数声明：按角度域轨迹更新腿部目标；当前任务调用，但源文件存在同名重复定义。 */
+/* 函数声明：按角度域轨迹更新腿部目标；当前任务调用。 */
 void getHitPos(void);
+/* 函数声明：按角度域轨迹更新腿部PVT目标；当前任务调用。 */
+void getHitPosPVT(void);
 /* 函数声明：按四个给定位置执行腿部位置控制；当前供上层动作逻辑调用。 */
 void Leg_PosCtrl(float p1, float p2, float p3, float p4);
 /* 函数声明：按四个给定位置执行腿部 PVT 控制；实现保留，目标目录内未检索到调用。 */

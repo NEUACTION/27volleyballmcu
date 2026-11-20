@@ -331,84 +331,20 @@ void GetPSNum2(void)
 	}
 }
 
-/* HAL 回调：UART7/UART10 单字节接收完成中断入口；按句柄分流，向独立队列投递完整帧并续收。 */
+/* HAL 回调：UART7/UART10 单字节接收完成中断入口；(现在第2轮光电没写，不管。如果想换一种模式，可以看看排球的代码）按句柄分流，向独立队列投递完整帧并续收。 */
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
 	if ((huart != NULL) && (huart == &PS_UART))
 	{
-		// DEBUG("okok\r\n");
-		/* ps_cnt 跟踪 UART7 单字节接收在帧内的写入位置，仅在该 UART 分支保留状态。 */
-		static int ps_cnt = 0;
-		BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+		BaseType_t xHigherPriorityTaskWoken = pdFALSE;//防御性，标记是否需要切换任务
 		if (s_ps_rx_queue != NULL)
 		{
-			/* 队列按 item_size 拷贝整帧，避免续收覆盖 */
+			/* 队列一个字节一个字节传，后面大概是错误的东西：按 item_size 拷贝整帧，避免续收覆盖 */
 			(void)xQueueSendFromISR(s_ps_rx_queue, ps_rxbuffer, &xHigherPriorityTaskWoken);
 		}
 		/* 立刻续收：避免接收间隙造成溢出/丢包 */
-		if(ps_rxbuffer[0] == 'I' && ps_rxbuffer[1] == 'O' && ps_rxbuffer[PS_RX_LEN - 2] == '\r' && ps_rxbuffer[PS_RX_LEN - 1] == '\n')
-		{
-			
-			for (int i = 0; i < (PS_RX_LEN - 4)-1; i++)
-			{
-				ps_num[i] = ps_rxbuffer[i + 2] - '0';
-			}
-			ps_cnt = 0;
-		}
-		else if (ps_rxbuffer[ps_cnt] == 'I')
-		{
-			// DEBUG("%d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d\r\n", ps_num[0], ps_num[1], ps_num[2], ps_num[3], ps_num[4], ps_num[5], ps_num[6], ps_num[7], ps_num[8], ps_num[9], ps_num[10], ps_num[11]);
-			ps_rxbuffer[0] = 'I';
-			ps_cnt = 1;
-		}
-		else if(ps_cnt >= PS_RX_LEN - 1)
-		{
-			// DEBUG("%d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d\r\n", ps_num[0], ps_num[1], ps_num[2], ps_num[3], ps_num[4], ps_num[5], ps_num[6], ps_num[7], ps_num[8], ps_num[9], ps_num[10], ps_num[11]);
-			ps_cnt = 0;
-		}
-		else
-		{
-			// DEBUG("%d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d\r\n", ps_num[0], ps_num[1], ps_num[2], ps_num[3], ps_num[4], ps_num[5], ps_num[6], ps_num[7], ps_num[8], ps_num[9], ps_num[10], ps_num[11]);
-			ps_cnt ++;
-		}
-		// DEBUG("%s", ps_rxbuffer);
-		(void)HAL_UART_Receive_IT(huart, ps_rxbuffer + ps_cnt, 1);
-		portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
-	}
-
-	if ((huart != NULL) && (huart == &PS_UART_2))
-	{
-		// DEBUG("okok\r\n");
-		/* ps_cnt_2 跟踪 UART10 单字节接收位置，与 UART7 计数相互独立。 */
-		static int ps_cnt_2 = 0;
-		BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-		if (s_ps_rx_queue_2 != NULL)
-		{
-			/* 队列按 item_size 拷贝整帧，避免续收覆盖 */
-			(void)xQueueSendFromISR(s_ps_rx_queue_2, ps_rxbuffer_2, &xHigherPriorityTaskWoken);
-		}
-		/* 立刻续收：避免接收间隙造成溢出/丢包 */
-		if(ps_rxbuffer_2[0] == 'I' && ps_rxbuffer_2[1] == 'O' && ps_rxbuffer_2[PS_RX_LEN - 2] == '\r' && ps_rxbuffer_2[PS_RX_LEN - 1] == '\n')
-		{
-			// DEBUG("%s", ps_rxbuffer);
-			for (int i = 0; i < (PS_RX_LEN - 4)-1; i++)
-			{
-				ps_num_2[i] = ps_rxbuffer_2[i + 2] - '0';
-			}
-			ps_cnt_2 = 0;
-		}
-		else if (ps_rxbuffer_2[ps_cnt_2] == 'I')
-		{
-			ps_rxbuffer_2[0] = 'I';
-			ps_cnt_2 = 1;
-		}
-		else if(ps_cnt_2 >= PS_RX_LEN - 1)
-		{
-			ps_cnt_2 = 0;
-		}
-		else ps_cnt_2 ++;
-		(void)HAL_UART_Receive_IT(huart, ps_rxbuffer_2 + ps_cnt_2, 1);
-		portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+		(void)HAL_UART_Receive_IT(huart, ps_rxbuffer, PS_RX_LEN);
+		portYIELD_FROM_ISR(xHigherPriorityTaskWoken);//防御性，如果队列投递唤醒了更高优先级任务，则切换到该任务
 	}
 }
 
