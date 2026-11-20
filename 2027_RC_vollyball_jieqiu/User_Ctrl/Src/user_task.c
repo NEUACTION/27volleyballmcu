@@ -7,6 +7,7 @@
 #include "zlr_math.h"
 
 /* 驱动器回报帧 StdId 规则：StdId = 0x280 + DriverNum */
+/* 函数：将反馈帧标准 ID 转换为驱动器编号；肘腕直接取 ID，其余按基址偏移，非法范围返回错误。 */
 static int Fdcan_ReportStdIdToDriverNum(uint32_t stdId, uint8_t *outDriverNum)
 {
 	if (outDriverNum == NULL)
@@ -16,6 +17,7 @@ static int Fdcan_ReportStdIdToDriverNum(uint32_t stdId, uint8_t *outDriverNum)
 	
 	if (stdId == ELBOW || stdId == WRIST)
 	{
+		/* dn 是待输出的驱动器编号；仅接受协议支持的 1-64 范围。 */
 		const uint32_t dn = stdId;
 		if ((dn < 1U) || (dn > 64U))
 		{
@@ -37,6 +39,7 @@ static int Fdcan_ReportStdIdToDriverNum(uint32_t stdId, uint8_t *outDriverNum)
 }
 
 /* RXtask 上下文解析：FDCAN1 / FDCAN3 解析函数不同也没问题，在这里分发即可 */
+/* 回调：在 FDCAN 接收任务上下文解析腿部反馈；当前仅 FDCAN_WL 的 LEG1-LEG4 分支启用，轮和 FDCAN_TK 解析保持屏蔽。 */
 static void User_FDCAN_RxTaskParse(const UserFDCAN_RxMsg_t *msg)
 {
 	if ((msg == NULL) || (msg->bus == NULL))
@@ -44,12 +47,14 @@ static void User_FDCAN_RxTaskParse(const UserFDCAN_RxMsg_t *msg)
 		return;
 	}
 
+	/* dn 是由回报帧标识解出的驱动器号，供总线分发 switch 使用。 */
 	uint8_t dn = 0U;
 	if (Fdcan_ReportStdIdToDriverNum(msg->header.Identifier, &dn) != 0)
 	{
 		return;
 	}
 
+	/* frame_num 按每个 8 字节子帧计数；msg_data 指向当前子帧起始位置。 */
 	int frame_num = msg->data_len / 8;
 	for (int i = 0; i < frame_num; i++)
 	{
@@ -153,7 +158,9 @@ static void User_FDCAN_RxTaskParse(const UserFDCAN_RxMsg_t *msg)
 
 }
 
+/* 全局句柄：CMSIS 用户任务 ID；User_Task_Init 成功创建后有效。 */
 osThreadId_t user_task = NULL;
+/* 全局句柄：FreeRTOS 用户任务句柄；任务入口启动后写入，供任务通知等用途。 */
 TaskHandle_t user_task_handle = NULL;
 
 /**
@@ -161,6 +168,7 @@ TaskHandle_t user_task_handle = NULL;
  * @param timeout_ms 超时时间，单位毫秒
  * @retval TickType_t 对应的系统节拍数
  */
+/* 函数：将毫秒超时转换为 RTOS Tick；零超时不等待，0xFFFFFFFF 表示永久等待。 */
 TickType_t ms_to_ticks(uint32_t timeout_ms)
 {
 	if (timeout_ms == 0U)
@@ -174,6 +182,7 @@ TickType_t ms_to_ticks(uint32_t timeout_ms)
 	return pdMS_TO_TICKS(timeout_ms);
 }
 
+/* 函数：按调用次数产生指定时长的蜂鸣开关节拍；返回 1 表示蜂鸣周期结束。 */
 uint8_t Beep(uint32_t time)
 {
 	static uint8_t flag = 0;
@@ -203,10 +212,13 @@ uint8_t Beep(uint32_t time)
 	return 0;
 }
 
+/* 全局变量：待执行蜂鸣的剩余节拍计数；Beep_Control 每次调用递减。 */
 uint32_t Beep_Time = 0;
+/* 函数：设置蜂鸣剩余节拍数；调用后由周期任务执行 Beep_Control 消耗。 */
 void SetBeep(uint32_t time){
     Beep_Time = time;
 }
+/* 函数：根据 Beep_Time 控制蜂鸣器 GPIO；当前由用户任务周期调用。 */
 void Beep_Control(void)
 {
     if(Beep_Time > 0)
@@ -219,6 +231,7 @@ void Beep_Control(void)
         BEEP_OFF;
     }
 }
+/* 函数：运行成功后提示蜂鸣两次；当前函数保留，主任务调用点已注释。 */
 void Start_Info(void)
 {
 	static uint8_t i = 0;
@@ -231,6 +244,7 @@ void Start_Info(void)
 /**
  * @brief 初始化
  */
+/* 函数：启动 UART、FDCAN、USB 及用户控制任务；系统启动时调用一次。 */
 void User_Task_Init(void)
 {
 	/* UART8：TX 用 VOFA，RX 用 DMA+IDLE */
@@ -282,11 +296,13 @@ void User_Task_Init(void)
  * @brief 主任务
  * @param argument 任务参数
  */
+/* 函数：每 5 ms 执行控制周期任务；当前负责复位、腿部目标更新及调试输出。 */
 void User_Task(void *argument)
 {
 	(void)argument;
 	user_task_handle = xTaskGetCurrentTaskHandle();
 
+	/* last_wake/period 用于固定 5 ms 周期；cnt/colorcnt 为循环内调试节拍计数。 */
 	TickType_t last_wake = xTaskGetTickCount();
 	const TickType_t period = pdMS_TO_TICKS(5);
 
@@ -294,6 +310,7 @@ void User_Task(void *argument)
 	uint32_t colorcnt = 0;
 
 
+	/* reset_flag、tarVel 和 lastTarPos1 保存跨周期控制状态；是否参与当前分支由下面的任务逻辑决定。 */
 	static bool reset_flag = false;
 	static float tarVel = 0;
 	static float lastTarPos1;
@@ -374,10 +391,11 @@ void User_Task(void *argument)
 			
 			tarVel = (lastTarPos1 - leg1Tar.pos) / 0.005;
 			lastTarPos1 = leg1Tar.pos;
-			DEBUG("%f  %f %f %f %f %f %f %f %f %f %f %f %f %f\r\n" , -leg1Tar.pos,
+			DEBUG("%f  %f %f %f %f %f %f %f %f %f %f %f %f %f %d %d %d %d\r\n" , -leg1Tar.pos,
 				 -leg1Msg.pos, leg2Msg.pos, -leg3Msg.pos, leg4Msg.pos,
 				  tarVel,-leg1Msg.vel, leg2Msg.vel, -leg3Msg.vel,
-				   leg4Msg.vel, leg1Msg.currQ, leg2Msg.currQ, leg3Msg.currQ, leg4Msg.currQ);
+				   leg4Msg.vel, leg1Msg.currQ, leg2Msg.currQ, leg3Msg.currQ, leg4Msg.currQ,
+					leg1Msg.error, leg2Msg.error, leg3Msg.error, leg4Msg.error);
 			
 			
 			
@@ -582,6 +600,7 @@ void User_Task(void *argument)
 	}
 }
 
+/* 函数：以梯形速度曲线生成四腿位置目标；当前主任务未调用此旧实现。 */
 void gethit_pos()
 {
 	static int stage = 0;
@@ -686,6 +705,7 @@ void gethit_pos()
 	// return pos;
 }
 
+/* 函数：按角度域规划计算四腿位置与位置增益；当前存在同名重复定义，须由工程维护者确认意图。 */
 void getHitPos()
 {
 	static float pos = 0.0f;
@@ -763,6 +783,7 @@ void getHitPos()
     }
 }
 
+/* 函数：按角度域规划计算速度与 MIT 增益；该同名定义与前一函数冲突，当前调用状态不确定。 */
 void getHitPos()
 {
 	static float pos = 0.0f;
@@ -846,6 +867,7 @@ void getHitPos()
 		leg4Tar.mit_kd = 1.0f;
     }
 }
+/* 函数：限幅并向四腿下发位置目标；当前主任务调用。 */
 void Leg_PosCtrl(float p1, float p2, float p3, float p4)
 {
 	static float TAR_LIMIT = 1.05f;
@@ -888,6 +910,7 @@ void Leg_PosCtrl(float p1, float p2, float p3, float p4)
 	}
 }
 /*注意限幅*/
+/* 函数：限幅四腿位置与速度并下发 PVT 控制；当前声明供上层动作流程使用。 */
 void LegPVTCtrl(float p1, float p2, float p3, float p4)
 {
 	const float TAR_LIMIT = 1.05f;

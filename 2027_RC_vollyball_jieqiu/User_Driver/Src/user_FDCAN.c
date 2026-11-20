@@ -13,45 +13,67 @@
  *  - rxTask 负责从 FIFO 搬运并回调到上层解析（任务上下文）
  */
 
+/* 宏：每条 FDCAN 发送任务的栈空间；当前启用。 */
 #define FDCAN_TX_TASK_STACK_SIZE           (512U * 4U)
+/* 宏：FDCAN 发送任务优先级；当前高于普通优先级。 */
 #define FDCAN_TX_TASK_PRIORITY             ((osPriority_t)osPriorityAboveNormal)
 
+/* 宏：接收任务栈空间；当前启用。 */
 #define FDCAN_RX_TASK_STACK_SIZE           (512U * 4U)
+/* 宏：接收任务优先级；当前高于普通优先级。 */
 #define FDCAN_RX_TASK_PRIORITY             ((osPriority_t)osPriorityAboveNormal)
 
+/* 宏：每条 CAN 总线的软件发送队列容量；当前启用。 */
 #define FDCAN_TX_QUEUE_LEN                 (32U)
 // #define FDCAN1_TX_INTERFRAME_DELAY_US      (500U)
 // #define FDCAN3_TX_INTERFRAME_DELAY_US      (500U) 
 
+/* 宏：FDCAN1 两帧发送间隔；当前启用值为 200 微秒，旧的 500/0 值保持屏蔽。 */
 #define FDCAN1_TX_INTERFRAME_DELAY_US      (200U)
+/* 宏：FDCAN3 两帧发送间隔；当前启用值为 450 微秒，旧的 500/0 值保持屏蔽。 */
 #define FDCAN3_TX_INTERFRAME_DELAY_US      (450U) 
 
 // #define FDCAN1_TX_INTERFRAME_DELAY_US      (0U)
 // #define FDCAN3_TX_INTERFRAME_DELAY_US      (0U)
 
+/* 宏：接收任务通知位，表示 FDCAN1 FIFO0 有新帧；当前启用。 */
 #define FDCAN_NOTIFY_RX1_FIFO0             (1UL << 0)
+/* 宏：接收任务通知位，表示 FDCAN3 FIFO1 有新帧；当前启用。 */
 #define FDCAN_NOTIFY_RX3_FIFO1             (1UL << 1)
 
 typedef struct
 {
+	/* 对应总线的待发送消息队列；由 FDCAN_ENABLE 初始化。 */
 	QueueHandle_t queue;
+	/* 本任务负责发送的 FDCAN 控制器句柄。 */
 	FDCAN_HandleTypeDef *bus;
+	/* 同一总线连续帧之间的微秒延时。 */
 	uint32_t interframe_delay_us;
 } FdcanTxTaskCtx_t;
 
+/* 静态句柄：FDCAN1 发送队列；NULL 表示发送服务尚未建立。 */
 static QueueHandle_t s_fdcan1_tx_queue = NULL;
+/* 静态句柄：FDCAN3 发送队列；NULL 表示发送服务尚未建立。 */
 static QueueHandle_t s_fdcan3_tx_queue = NULL;
 
+/* 静态句柄：FDCAN1 发送任务；FDCAN_ENABLE 创建后使用。 */
 static osThreadId_t s_fdcan1_tx_task = NULL;
+/* 静态句柄：FDCAN3 发送任务；FDCAN_ENABLE 创建后使用。 */
 static osThreadId_t s_fdcan3_tx_task = NULL;
+/* 静态句柄：共用接收任务；FDCAN_ENABLE 创建后使用。 */
 static osThreadId_t s_fdcan_rx_task = NULL;
+/* 静态句柄：接收任务 FreeRTOS 句柄，供 ISR 通知；任务启动后有效。 */
 static TaskHandle_t s_fdcan_rx_task_handle = NULL;
 
+/* 静态上下文：FDCAN1 发送任务参数；初始化后持续使用。 */
 static FdcanTxTaskCtx_t s_fdcan1_tx_ctx = {0};
+/* 静态上下文：FDCAN3 发送任务参数；初始化后持续使用。 */
 static FdcanTxTaskCtx_t s_fdcan3_tx_ctx = {0};
 
+/* 静态回调：上层接收解析函数；未注册时收到的帧不向上层分发。 */
 static UserFDCAN_RxCallback_t s_fdcan_rx_cb = NULL;
 
+/* 函数：从指定硬件 FIFO 取帧并转换为统一接收消息；HAL 读取失败或参数无效返回失败。 */
 static uint8_t Fdcan_CopyRxToMsg(FDCAN_HandleTypeDef *hfdcan, uint32_t fifo, UserFDCAN_RxMsg_t *out)
 {
 	if ((hfdcan == NULL) || (out == NULL))
@@ -59,6 +81,7 @@ static uint8_t Fdcan_CopyRxToMsg(FDCAN_HandleTypeDef *hfdcan, uint32_t fifo, Use
 		return 0U;
 	}
 
+	/* data 是 HAL 读取出的临时 CAN-FD 负载，随后按 DLC 长度复制到 out。 */
 	uint8_t data[64];
 	if (HAL_FDCAN_GetRxMessage(hfdcan, fifo, &out->header, data) != HAL_OK)
 	{
@@ -78,9 +101,12 @@ static uint8_t Fdcan_CopyRxToMsg(FDCAN_HandleTypeDef *hfdcan, uint32_t fifo, Use
 }
 
 
+/* 任务入口前置声明：按总线上下文发送队列消息；仅由 FDCAN_ENABLE 创建。 */
 static void FdcanTxTask(void *argument);
+/* 任务入口前置声明：依据 ISR 通知搬运 FIFO 并回调上层；仅由 FDCAN_ENABLE 创建。 */
 static void FdcanRxTask(void *argument);
 
+/* 函数：以 DWT 周期计数器忙等指定微秒；零延时或计数频率无效时直接返回。 */
 static void Fdcan_DelayUs(uint32_t us)
 {
 	if (us == 0U)
@@ -112,6 +138,7 @@ static void Fdcan_DelayUs(uint32_t us)
 	}
 }
 
+/* 函数：将字节数向上匹配到 CAN-FD 支持的 DLC；发送封包路径调用。 */
 uint32_t Fdcan_BytesToDlc(uint8_t len)
 {
 	if (len <= 0U)
@@ -147,6 +174,7 @@ uint32_t Fdcan_BytesToDlc(uint8_t len)
 	return FDCAN_DLC_BYTES_64;
 }
 
+/* 函数：将 CAN-FD DLC 转为实际字节数；接收帧转换路径调用。 */
 uint8_t Fdcan_DlcToBytes(uint32_t dlc)
 {
 	switch (dlc)
@@ -188,6 +216,7 @@ uint8_t Fdcan_DlcToBytes(uint32_t dlc)
 	}
 }
 
+/* 函数：持续重新初始化并启动发生错误的 FDCAN；错误路径进入后不会返回。 */
 void CAN_Error_Handle(FDCAN_HandleTypeDef *hfdcan)
 {
 	while(1)
@@ -204,6 +233,7 @@ void CAN_Error_Handle(FDCAN_HandleTypeDef *hfdcan)
 /**
  * @brief 注册接收回调（在 rxTask 上下文触发）
  */
+/* 函数：安装接收分发回调；传入 NULL 可停用上层解析。 */
 void User_FDCAN_RegisterRxCallback(UserFDCAN_RxCallback_t cb)
 {
 	s_fdcan_rx_cb = cb;
@@ -218,6 +248,7 @@ void User_FDCAN_RegisterRxCallback(UserFDCAN_RxCallback_t cb)
  * @param timeout_ms 超时时间（毫秒）
  * @retval int 返回状态
  */
+/* 函数：校验并将 CAN-FD 数据封装后放入对应总线发送队列；队列满或总线无效返回错误。 */
 int User_FDCAN_SendMsg(FDCAN_HandleTypeDef *hfdcan, uint8_t *data, uint8_t data_len, uint32_t stdId, uint32_t timeout_ms)
 {
 	if (hfdcan == NULL || data == NULL || data_len == 0 || data_len > 64)
@@ -244,6 +275,7 @@ int User_FDCAN_SendMsg(FDCAN_HandleTypeDef *hfdcan, uint8_t *data, uint8_t data_
 		return -1;
 	}
 
+	/* req 是加入发送队列的完整请求快照，避免调用方缓冲区后续变化影响待发内容。 */
 	UserFDCAN_TxMsg_t req = {0};
 	req.bus = hfdcan;
 	req.data_len = data_len;
@@ -269,8 +301,10 @@ int User_FDCAN_SendMsg(FDCAN_HandleTypeDef *hfdcan, uint8_t *data, uint8_t data_
 /**
  * @brief FDCAN 初始化
  */
+/* 函数：配置并启动 FDCAN1/FDCAN3 接收过滤器、延迟补偿和通知；接收任务/队列另由 FDCAN_ENABLE 创建。 */
 void User_FDCAN_Init(void)
 {
+	/* 两个过滤器配置对象分别对应 FDCAN1/FDCAN3；标准/扩展 ID 均转入各自 FIFO。 */
 	FDCAN_FilterTypeDef FDCAN1_RXFilter = {0};
 	FDCAN_FilterTypeDef FDCAN3_RXFilter = {0};
 	
@@ -342,6 +376,7 @@ void User_FDCAN_Init(void)
 /**
  * @brief 配置FDCAN，开启发送和接收任务
  */
+/* 函数：启动 FDCAN 控制器并创建两条发送队列、发送任务及共用接收任务；重复调用不重复建任务。 */
 void FDCAN_ENABLE(void)
 {
 	User_FDCAN_Init();
@@ -392,6 +427,7 @@ void FDCAN_ENABLE(void)
 	}
 }
 
+/* HAL 回调：仅对 FDCAN1 FIFO0 新消息设置接收任务通知位；ISR 不直接解析帧。 */
 void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs)
 {
 	if ((hfdcan == &hfdcan1) && ((RxFifo0ITs & FDCAN_IT_RX_FIFO0_NEW_MESSAGE) != 0U))
@@ -405,6 +441,7 @@ void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs)
 	}
 }
 
+/* HAL 回调：仅对 FDCAN3 FIFO1 新消息设置接收任务通知位；ISR 不直接解析帧。 */
 void HAL_FDCAN_RxFifo1Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo1ITs)
 {
 	if ((hfdcan == &hfdcan3) && ((RxFifo1ITs & FDCAN_IT_RX_FIFO1_NEW_MESSAGE) != 0U))
@@ -418,8 +455,10 @@ void HAL_FDCAN_RxFifo1Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo1ITs)
 	}
 }
 
+/* 任务：从本总线队列取出发送请求并提交 HAL；失败帧丢弃，成功后执行配置的帧间延时。 */
 static void FdcanTxTask(void *argument)
 {
+	/* ctx 固定绑定单一总线/队列，req 为该任务逐条消费的发送请求。 */
 	FdcanTxTaskCtx_t *ctx = (FdcanTxTaskCtx_t *)argument;
 	if ((ctx == NULL) || (ctx->bus == NULL))
 	{
@@ -448,6 +487,7 @@ static void FdcanTxTask(void *argument)
 		FDCAN_TxHeaderTypeDef tx = req.header;
 
 		/* timeout_ms==0：按“必须等上一帧发送完成再发下一帧”的语义，默认无限等待 */
+		/* waitTicks 当前仅做超时语义换算；硬件入队失败时本实现不在任务内等待重试。 */
 		TickType_t waitTicks = ms_to_ticks(req.timeout_ms);
 		if (waitTicks == 0U)
 		{
@@ -466,6 +506,7 @@ static void FdcanTxTask(void *argument)
 	}
 }
 
+/* HAL 回调：检测 BUS-OFF 后停止并重启控制器；当前执行自动恢复分支。 */
 void HAL_FDCAN_ErrorStatusCallback(FDCAN_HandleTypeDef *hfdcan, uint32_t ErrorStatusITs)
 {
 	// 单节点/无 ACK 时很容易累积错误进入 BUS-OFF，导致后续 AddMessage 一直失败。
@@ -477,6 +518,7 @@ void HAL_FDCAN_ErrorStatusCallback(FDCAN_HandleTypeDef *hfdcan, uint32_t ErrorSt
 	}
 }
 
+/* 任务：等待通知并清空 FDCAN1 FIFO0/FDCAN3 FIFO1，调用已注册回调；当前 RX 任务模式启用。 */
 static void FdcanRxTask(void *argument)
 {
 	(void)argument;
@@ -484,6 +526,7 @@ static void FdcanRxTask(void *argument)
 	/* 记录句柄用于 ISR 通知 */
 	s_fdcan_rx_task_handle = xTaskGetCurrentTaskHandle();
 
+	/* notifyBits 记录待处理总线 FIFO；每轮清零后由 ISR 通知重新置位。 */
 	uint32_t notifyBits = (FDCAN_NOTIFY_RX1_FIFO0 | FDCAN_NOTIFY_RX3_FIFO1);
 	for (;;)
 	{

@@ -5,6 +5,7 @@
 #include "usbd_cdc_if.h"
 #include "usbd_def.h"
 
+/* 外部变量：HS USB Device 句柄；UsbCdc_IsConfigured 读取其枚举状态和 class data。 */
 extern USBD_HandleTypeDef hUsbDeviceHS;
 
 /*
@@ -30,34 +31,47 @@ extern USBD_HandleTypeDef hUsbDeviceHS;
  *  - UsbCdc_IsConfigured() 用于确保枚举完成后再收发，避免未配置时卡住/无回调。
  */
 
+/* 宏：USB 发送任务栈大小；任务创建成功后启用。 */
 #define USB_TX_TASK_STACK_SIZE        (512U * 4U)
+/* 宏：USB 发送任务优先级；当前高于普通优先级。 */
 #define USB_TX_TASK_PRIORITY          ((osPriority_t)osPriorityAboveNormal)
 
+/* 宏：USB 发送流缓冲区容量；发送任务创建时分配使用。 */
 #define USB_TX_STREAM_SIZE_BYTES      (2048U)
+/* 宏：发送流缓冲唤醒门限；当前 1 字节即可触发。 */
 #define USB_TX_TRIGGER_LEVEL          (1U)
 
+/* 宏：USB 接收任务栈大小；任务创建成功后启用。 */
 #define USB_RX_TASK_STACK_SIZE        (512U * 4U)
+/* 宏：USB 接收任务优先级；当前高于普通优先级。 */
 #define USB_RX_TASK_PRIORITY          ((osPriority_t)osPriorityAboveNormal)
 
+/* 宏：USB 原始接收流缓冲区容量；当前接收链路启用时使用。 */
 #define USB_RX_STREAM_SIZE_BYTES      (2048U)
+/* 宏：原始接收流唤醒门限；当前 1 字节即可触发。 */
 #define USB_RX_TRIGGER_LEVEL          (1U)
 
+/* 宏：预留的应用层接收缓冲容量；当前未被有效代码引用。 */
 #define USB_APP_RX_STREAM_SIZE_BYTES  (1024U)
+/* 宏：预留的应用接收唤醒门限；当前未被有效代码引用。 */
 #define USB_APP_RX_TRIGGER_LEVEL      (1U)
 
 //接收帧帧头帧尾
+/* 全局常量：历史 USB 接收帧头“SP”和 CRLF 帧尾；引用仅在注释代码中，当前未启用。 */
 const char frame_header_read1  = 'S';
 const char frame_header_read2  = 'P';
 const char frame_tail_read1    = '\r';
 const char frame_tail_read2    = '\n';
 
 //发送帧帧头帧尾
+/* 全局常量：历史 USB 发送帧头“QR”和 CRLF 帧尾；引用仅在注释代码中，当前未启用。 */
 const char frame_header_write1 = 'Q';
 const char frame_header_write2 = 'R'; 
 const char frame_tail_write1   = '\r';
 const char frame_tail_write2   = '\n';
 
 //发送缓冲区和接收缓冲区
+/* 全局传输结构：历史发送/接收缓冲；当前文件内没有直接读写，保留供兼容接口使用。 */
 trans_t TX_Data;		
 trans_r RX_Data;		
 
@@ -66,15 +80,22 @@ trans_r RX_Data;
  * s_usb_rx_stream      : 原始接收队列（USB ISR/协议栈 -> usbRxTask）
  */
 
+/* 静态句柄：USB 发送字节流队列；初始化成功后由发送接口和发送任务共同使用。 */
 static StreamBufferHandle_t s_usb_tx_stream = NULL;
+/* 静态句柄：USB 唯一发送任务；初始化成功后启用。 */
 static osThreadId_t s_usb_tx_task = NULL;
+/* 静态句柄：发送任务 FreeRTOS 句柄；用于 CDC 完成回调通知。 */
 static TaskHandle_t s_usb_tx_task_handle = NULL;
 
+/* 静态句柄：USB 原始接收字节流；初始化成功后由 ISR 与接收任务使用。 */
 static StreamBufferHandle_t s_usb_rx_stream = NULL;
+/* 静态句柄：USB 接收任务；初始化成功后启用。 */
 static osThreadId_t s_usb_rx_task = NULL;
+/* 静态回调：应用注册的接收处理函数；未注册时不执行事件回调分发。 */
 static UsbRx_Callback_t s_usb_rx_cb = NULL;
 
 /* 发送统计：用于判断是否有丢包/拥塞（调试用途） */
+/* 静态统计：发送入队/丢弃字节及发送成功、忙碌、失败计数；由发送路径更新、统计接口读取。 */
 static volatile uint32_t s_usb_enqueued_bytes = 0;
 static volatile uint32_t s_usb_dropped_bytes = 0;
 static volatile uint32_t s_usb_tx_ok_pkts = 0;
@@ -83,18 +104,22 @@ static volatile uint32_t s_usb_tx_fail_pkts = 0;
 static volatile uint32_t s_usb_tx_fail_bytes = 0;
 
 /* 接收统计：记录进入 RX 缓冲的字节数与丢弃字节数（调试用途） */
+/* 静态统计：接收 ISR 入队/丢弃及应用转发/丢弃字节数；由接收链路更新。 */
 static volatile uint32_t s_usb_rx_enqueued_bytes = 0;
 static volatile uint32_t s_usb_rx_dropped_bytes = 0;
 static volatile uint32_t s_usb_app_rx_forwarded_bytes = 0;
 static volatile uint32_t s_usb_app_rx_dropped_bytes = 0;
 
+/* 任务入口前置声明：串行取出发送缓冲并提交 USB CDC；初始化时创建。 */
 static void UsbTxTask(void *argument);
+/* 任务入口前置声明：消费接收缓冲并转发/回调；初始化时创建。 */
 static void UsbRxTask(void *argument);
 
 /**
  * @brief  初始化 USB 通信相关资源（任务、缓冲区等）
  * @note   记得调用
  */
+/* 函数：创建 USB 收发流及唯一收发任务；可重复调用，已有资源不重复创建。 */
 void User_Communication_Init(void)
 {
 	/* 创建 stream buffer（只创建一次）；失败则保持 NULL，上层可据此做降级处理 */
@@ -134,6 +159,7 @@ void User_Communication_Init(void)
  * @brief  判断 CDC 是否已配置完成
  * @note   dev_state == CONFIGURED 且 class data 就绪，才允许开始收发。
  */
+/* 函数：检查 HS CDC 枚举和 class data 状态；发送就绪判断使用。 */
 bool UsbCdc_IsConfigured(void)
 {
 	return (hUsbDeviceHS.dev_state == USBD_STATE_CONFIGURED) && (hUsbDeviceHS.pClassData != NULL);
@@ -142,6 +168,7 @@ bool UsbCdc_IsConfigured(void)
 /**
  * @brief  判断 USB CDC 发送是否准备好
  */
+/* 函数：查询 USB 发送是否就绪；当前直接复用 CDC 枚举状态。 */
 bool UsbTx_IsReady(void)
 {
 	return UsbCdc_IsConfigured();
@@ -154,6 +181,7 @@ bool UsbTx_IsReady(void)
  * @param  tx_ok_pkts 成功发送的包数
  * @param  tx_busy_cnt 发送忙碌计数
  */
+/* 函数：读取发送入队/丢弃字节及成功/忙次数；空字段指针允许跳过输出，工程内未发现有效调用点。 */
 void UsbTx_GetStats(uint32_t *enqueued_bytes, uint32_t *dropped_bytes, uint32_t *tx_ok_pkts, uint32_t *tx_busy_cnt)
 {
 	if (enqueued_bytes != NULL)
@@ -179,6 +207,7 @@ void UsbTx_GetStats(uint32_t *enqueued_bytes, uint32_t *dropped_bytes, uint32_t 
  * @param out 指向UsbStats_t结构体的指针，用于存储获取到的统计信息
  * @note 如果传入的指针为NULL，则函数直接返回，不进行任何操作
  */
+/* 函数：汇总复制 USB 收发统计数据；输出为空时不执行，工程内未发现有效调用点。 */
 void Usb_GetStats(UsbStats_t *out)
 {
 	// 检查输出指针是否有效
@@ -213,6 +242,7 @@ void Usb_GetStats(UsbStats_t *out)
  * 当CDC USB发送完成时，此函数从中断服务程序(ISR)中被调用
  * 它会通知USB发送任务，可能触发任务切换
  */
+/* 回调：CDC IN 发送完成中断通知发送任务继续发送；任务句柄未就绪时不通知。 */
 void UsbTx_OnCdcTxCpltFromISR(void)
 {
     // 创建一个标志变量，用于判断是否需要进行任务切换
@@ -233,6 +263,7 @@ void UsbTx_OnCdcTxCpltFromISR(void)
  * @brief  异步投递数据到USB发送任务
  * @retval 0:成功 负数:失败
  */
+/* 函数：将待发数据写入 TX 流并按超时返回结果；实际 CDC 发送由唯一任务执行。 */
 int UsbTx_Send(const uint8_t *data, uint16_t len, uint32_t timeout_ms)
 {
 	/*
@@ -291,6 +322,7 @@ int UsbTx_Send(const uint8_t *data, uint16_t len, uint32_t timeout_ms)
 /**
  * @brief  发送字符串（不自动追加\r\n）
  */
+/* 函数：将字符串交给 USB 发送接口；当前调用 UsbTx_Send 完成排队。 */
 int UsbTx_SendString(const char *str, uint32_t timeout_ms)
 {
 	if (str == NULL)
@@ -300,6 +332,7 @@ int UsbTx_SendString(const char *str, uint32_t timeout_ms)
 	return UsbTx_Send((const uint8_t *)str, (uint16_t)strlen(str), timeout_ms);
 }
 
+/* 函数：按格式组织并通过 USB 调试通道发送文本；受 CDC 就绪状态限制，工程内未发现有效调用点。 */
 int DEBUG_USB(const char *fmt, ...)
 {
 	/* printf 风格调试输出：格式化到栈上缓冲并异步投递（默认不阻塞） */
@@ -335,6 +368,7 @@ int DEBUG_USB(const char *fmt, ...)
 /**
  * @brief  注册接收回调
  */
+/* 函数：注册或清除 USB 接收回调；当前初始化处的注册调用已注释，未注册时不分发应用回调。 */
 void UsbRx_RegisterCallback(UsbRx_Callback_t cb)
 {
 	/* 回调在 usbRxTask 上下文触发；可用于事件式处理（解析命令/统计等） */
@@ -346,6 +380,7 @@ void UsbRx_RegisterCallback(UsbRx_Callback_t cb)
  * @param data 接收数据
  * @param len 数据长度
  */
+/* 回调入口：将 CDC OUT 收到的数据送入 RX 流；队列不可用时接收数据无法保留。 */
 void UsbRx_OnCdcRxFromISR(const uint8_t *data, uint32_t len)
 {
 	/*
@@ -374,6 +409,7 @@ void UsbRx_OnCdcRxFromISR(const uint8_t *data, uint32_t len)
  * @param  timeout_ms 超时时间，单位毫秒
  * @retval uint16_t 接收字节数
  */
+/* 函数：从 USB 原始接收流读取数据并按超时等待；当前工程内未发现有效调用点。 */
 uint16_t UsbRx_Read(uint8_t *out, uint16_t out_len, uint32_t timeout_ms)
 {
 	if ((s_usb_rx_stream == NULL) || (out == NULL) || (out_len == 0U))
@@ -390,6 +426,7 @@ uint16_t UsbRx_Read(uint8_t *out, uint16_t out_len, uint32_t timeout_ms)
  * @brief  获取应用层 USB 接收缓冲区中可用的数据字节数
  * @retval size_t 可用字节数
  */
+/* 函数：查询 USB 原始接收流可读字节数；当前工程内未发现有效调用点。 */
 size_t UsbRx_Available(void)
 {
 	if (s_usb_rx_stream == NULL)
@@ -404,6 +441,7 @@ size_t UsbRx_Available(void)
  * @param rx_enqueued_bytes 已入队字节数
  * @param rx_dropped_bytes 丢弃字节数
  */
+/* 函数：读取 ISR 接收入队和丢弃字节计数；空指针字段跳过，工程内未发现有效调用点。 */
 void UsbRx_GetStats(uint32_t *rx_enqueued_bytes, uint32_t *rx_dropped_bytes)
 {
 	if (rx_enqueued_bytes != NULL)
@@ -736,6 +774,7 @@ void UsbRx_GetStats(uint32_t *rx_enqueued_bytes, uint32_t *rx_dropped_bytes)
  * @param argument 任务参数
  * @note   一直运行
  */
+/* 任务：唯一调用 CDC IN 发送的执行上下文；依据完成通知和 TX 流连续发送。 */
 static void UsbTxTask(void *argument)
 {
 	(void)argument;
@@ -806,6 +845,7 @@ static void UsbTxTask(void *argument)
  * @param argument 任务参数
  * @note   一直运行
  */
+/* 任务：消费 USB RX 流并向应用缓冲/注册回调转发；仅初始化成功后运行。 */
 static void UsbRxTask(void *argument)
 {
 	(void)argument;

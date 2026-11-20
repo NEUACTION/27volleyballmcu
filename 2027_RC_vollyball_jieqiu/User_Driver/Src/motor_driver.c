@@ -1,16 +1,20 @@
 #include "motor_driver.h"
 #include "user_usart.h"
 
+/* 函数：将无符号打包值线性映射到浮点物理量范围；由达妙反馈解析使用。 */
 static float uint_to_float(uint32_t x_int, float x_min, float x_max, int bits)
 {
 	/// converts unsigned int to float, given range and number of bits ///
+	/* span 和 offset 描述线性映射区间及起点；均仅服务于本次解包换算。 */
 	float span = x_max - x_min;
 	float offset = x_min;
 	return ((float)x_int)*span/((float)((1<<bits)-1)) + offset;
 }
 
+/* 函数：将浮点物理量限幅并量化为指定位宽无符号值；当前由 PVT 控制组帧使用。 */
 static uint32_t float_to_uint(float x_float, float x_min, float x_max, int bits)
 {
+    /* span 决定量化范围宽度；bits 非法或范围非正时函数提前返回。 */
     float span = x_max - x_min;
 
     // 基本保护
@@ -22,6 +26,7 @@ static uint32_t float_to_uint(float x_float, float x_min, float x_max, int bits)
     if (x_float > x_max) x_float = x_max;
 
     // levels = (2^bits - 1)，注意 bits==32 时不能用 (1u<<bits)
+    /* levels 是目标整数最大值，normalized/q 为归一化和量化临时值；该函数当前无调用点。 */
     uint32_t levels = (bits >= 32) ? 0xFFFFFFFFu : ((1u << bits) - 1u);
 
     // 归一化到 [0,1] 再量化到 [0,levels]
@@ -43,8 +48,10 @@ static uint32_t float_to_uint(float x_float, float x_min, float x_max, int bits)
 * @author ACTION
 * @note   方便用户使用 
 */
+/* 函数：按普通驱动器反馈标识解析状态、位置、速度、电流及错误；当前由 FDCAN 接收任务调用。 */
 void GetDriverMsg(driverMsg_t *driverMsg, const uint8_t *data8)
 {
+    /* identifier 选择反馈字段，FDCAN_Data 将帧内四字节拼为有符号数据；由本次报文解析使用。 */
     uint32_t identifier = data8[0];
 	FDCAN_Trans FDCAN_Data = {};
 		
@@ -153,11 +160,13 @@ void GetDriverMsg(driverMsg_t *driverMsg, const uint8_t *data8)
     }
 }
 
+/* 函数：解析达妙电机反馈帧并更新位置、速度和扭矩；当前接收分发中的调用已注释。 */
 void DMGetMotorMsg(driverMsg_t *driverMsg, const uint8_t *data)
 { 
 	// TODO 解算DM8009P的数据
 	/// unpack ints from can buffer /// 从can的缓冲区得到数据
 	//没用上的数据
+	/* id_err 拆分电机编号和错误码；当前位置/速度/扭矩的打包量随后映射为物理量。 */
 	uint8_t id_err = data[0];
 	uint8_t id = id_err & 0x0F; // 低4位：电机ID（CAN_ID 低8位）
 	uint8_t err = id_err >> 4; // 高4位：错误码
@@ -180,6 +189,7 @@ void DMGetMotorMsg(driverMsg_t *driverMsg, const uint8_t *data)
 }
 
 /*******************************控制驱动器命令************************************/
+/* 函数：按 DM_POS_MODE 发送达妙位置/速度目标；当前达妙控制路径使用。 */
 HAL_StatusTypeDef DMPosCtrl(FDCAN_HandleTypeDef *hfdcan, uint8_t DriverNum, float pos, float vel)
 {	
     uint32_t canId = DM_POS_MODE + DriverNum;
@@ -190,6 +200,7 @@ HAL_StatusTypeDef DMPosCtrl(FDCAN_HandleTypeDef *hfdcan, uint8_t DriverNum, floa
     return User_FDCAN_SendMsg(hfdcan, data, 8, canId, 0);
 }
 
+/* 函数：发送达妙电机设置零位命令；工程内调用仅见注释回零代码，当前未启用。 */
 HAL_StatusTypeDef DMSetPosZero(FDCAN_HandleTypeDef *hfdcan, uint16_t DriverNum, uint16_t CtrlMode)
 {		
 	uint32_t canId = DriverNum + CtrlMode;
@@ -207,6 +218,7 @@ HAL_StatusTypeDef DMSetPosZero(FDCAN_HandleTypeDef *hfdcan, uint16_t DriverNum, 
 	return User_FDCAN_SendMsg(hfdcan, data, 8, canId, 0);
 }
 
+/* 函数：发送达妙电机使能命令；模式由 CtrlMode 指定，当前模式切换路径使用。 */
 HAL_StatusTypeDef DMEnable(FDCAN_HandleTypeDef *hfdcan, uint16_t DriverNum, uint16_t CtrlMode)
 {	
     uint32_t canId = DriverNum + CtrlMode;
@@ -224,6 +236,7 @@ HAL_StatusTypeDef DMEnable(FDCAN_HandleTypeDef *hfdcan, uint16_t DriverNum, uint
     return User_FDCAN_SendMsg(hfdcan, data, 8, canId, 0);
 }
 
+/* 函数：发送达妙电机失能命令；模式由 CtrlMode 指定，当前模式切换路径使用。 */
 HAL_StatusTypeDef DMDisable(FDCAN_HandleTypeDef *hfdcan, uint16_t DriverNum, uint16_t CtrlMode)
 {
 	uint32_t canId = DriverNum + CtrlMode;
@@ -248,6 +261,7 @@ HAL_StatusTypeDef DMDisable(FDCAN_HandleTypeDef *hfdcan, uint16_t DriverNum, uin
  * @param  CMDmode    指令模式（PTP_MODE / BROADCAST_MODE）
  * @param  DriverNum  驱动器 ID（广播模式下为组号），范围：1~64
  */
+/* 函数：请求普通驱动器回零/复位；工程内调用仅见注释代码，当前未启用。 */
 HAL_StatusTypeDef ResetDriver(FDCAN_HandleTypeDef *hfdcan, CommandMode CMDmode, uint8_t DriverNum)
 {
     uint32_t canId    = DRIVER_SERVER_BASE_ID + CMDmode + DriverNum;
@@ -267,6 +281,7 @@ HAL_StatusTypeDef ResetDriver(FDCAN_HandleTypeDef *hfdcan, CommandMode CMDmode, 
  * @param  CMDmode    指令模式（PTP_MODE / BROADCAST_MODE）
  * @param  DriverNum  驱动器 ID（广播模式下为组号），范围：1~64
  */
+/* 函数：读取指定驱动器回零完成状态；当前 reset_control 对腿部调用。 */
 HAL_StatusTypeDef IfResetOkFlag(FDCAN_HandleTypeDef *hfdcan, CommandMode CMDmode, uint8_t DriverNum)
 {
     uint32_t canId    = DRIVER_SERVER_BASE_ID + CMDmode + DriverNum;
@@ -286,6 +301,7 @@ HAL_StatusTypeDef IfResetOkFlag(FDCAN_HandleTypeDef *hfdcan, CommandMode CMDmode
  * @param  CMDmode    指令模式（PTP_MODE / BROADCAST_MODE）
  * @param  DriverNum  驱动器 ID（广播模式下为组号），范围：1~64
  */
+/* 函数：清除/归零普通驱动器距离数据；工程内未发现有效调用点。 */
 HAL_StatusTypeDef EmptyDriverDistance(FDCAN_HandleTypeDef *hfdcan, CommandMode CMDmode, uint8_t DriverNum)
 {
     uint32_t canId    = DRIVER_SERVER_BASE_ID + CMDmode + DriverNum;
@@ -309,6 +325,7 @@ HAL_StatusTypeDef EmptyDriverDistance(FDCAN_HandleTypeDef *hfdcan, CommandMode C
  * @note   失能表示驱动器停止对电机驱动；本函数只下发“状态”指令，不切换控制模式。
  * @note   帧格式：data[0]=IDENTIFIER_SET_DRIVER_STATE，data[1]=state，其余填充静默字。
  */
+/* 函数：设置普通驱动器使能状态；根据 PTP/广播模式组帧，工程内当前调用点均为注释。 */
 HAL_StatusTypeDef SetDriverState(FDCAN_HandleTypeDef *hfdcan, CommandMode CMDmode, uint8_t DriverNum,
                     FunctionalState state)
 {
@@ -325,6 +342,7 @@ HAL_StatusTypeDef SetDriverState(FDCAN_HandleTypeDef *hfdcan, CommandMode CMDmod
     return User_FDCAN_SendMsg(hfdcan, data, 32, canId, 0);
 }
 
+/* 函数：组合设置驱动器使能状态并下发位置目标；模式切换和状态校正路径使用。 */
 HAL_StatusTypeDef SetStateAndPosCtrl(FDCAN_HandleTypeDef *hfdcan, CommandMode CMDmode, uint8_t DriverNum,
        FunctionalState state, int32_t pos)
 {
@@ -355,6 +373,7 @@ HAL_StatusTypeDef SetStateAndPosCtrl(FDCAN_HandleTypeDef *hfdcan, CommandMode CM
  * @note   本函数只下发“控制模式”指令，不改变使能/失能状态。
  * @note   帧格式：data[0]=IDENTIFIER_SET_CTRL_MODE，data[1]=CtlMode，其余填充静默字。
  */
+/* 函数：切换普通驱动器控制模式并附带位置目标；DriverControl 模式变更分支使用。 */
 HAL_StatusTypeDef SetDriverMode(FDCAN_HandleTypeDef *hfdcan, CommandMode CMDmode, uint8_t DriverNum,
                    uint8_t CtlMode, int32_t pos)
 {
@@ -386,6 +405,7 @@ HAL_StatusTypeDef SetDriverMode(FDCAN_HandleTypeDef *hfdcan, CommandMode CMDmode
 * @param  vel: 速度(脉冲/秒)，范围：-1024*4096 ~ 1024*4096
 * @param  kp/ki: 速度环参数（不想设置就给 -1）
 */
+/* 函数：下发普通驱动器速度目标及力矩约束；DriverControl 的速度模式调用。 */
 HAL_StatusTypeDef VelCtrl(FDCAN_HandleTypeDef *hfdcan, CommandMode CMDmode, uint8_t DriverNum,
         int32_t vel, float curr, bool clean)
 {
@@ -427,6 +447,7 @@ HAL_StatusTypeDef VelCtrl(FDCAN_HandleTypeDef *hfdcan, CommandMode CMDmode, uint
 * @brief  电机速度模式调节参数
 * @param  kp/ki: 速度环参数（不想设置就给 -1）
 */
+/* 函数：更新普通驱动器速度环 KP/KI 参数；参数目标变化时由 DriverControl 调用。 */
 HAL_StatusTypeDef SetVelKpKi(FDCAN_HandleTypeDef *hfdcan, CommandMode CMDmode, uint8_t DriverNum,
         float kp, float ki, bool i)
 {
@@ -472,6 +493,7 @@ HAL_StatusTypeDef SetVelKpKi(FDCAN_HandleTypeDef *hfdcan, CommandMode CMDmode, u
     return User_FDCAN_SendMsg(hfdcan, data, 32, canId, 0);
 }
 
+/* 以下旧版速度控制函数定义已注释屏蔽，不会编译或发送命令。 */
 // HAL_StatusTypeDef VelCtrl(FDCAN_HandleTypeDef *hfdcan, CommandMode CMDmode, uint8_t DriverNum,
 //         int32_t vel, float kp, float ki)
 // {
@@ -519,6 +541,7 @@ HAL_StatusTypeDef SetVelKpKi(FDCAN_HandleTypeDef *hfdcan, CommandMode CMDmode, u
 * @param  pos: 位置(脉冲)，范围：-1024*4096 ~ 1024*4096
 * @param  kp/kd: 位置环参数（不想设置就给 -1）
 */
+/* 函数：下发普通驱动器位置目标及位置环增益；DriverControl 的位置模式调用。 */
 HAL_StatusTypeDef PosCtrl(FDCAN_HandleTypeDef *hfdcan, CommandMode CMDmode, uint8_t DriverNum,
         int32_t pos, float kp, float kd)
 {
@@ -567,6 +590,7 @@ HAL_StatusTypeDef PosCtrl(FDCAN_HandleTypeDef *hfdcan, CommandMode CMDmode, uint
 * @param  TrqLimit：力矩限制（暂未实现，不想设置就给 -1）
 * @param  CurLimit：电流限制(A)，范围：0 ~ 160（不想设置就给 -1）
 */
+/* 函数：配置普通驱动器速度/位置等限制值；工程内未发现有效调用点。 */
 HAL_StatusTypeDef SetLimits(FDCAN_HandleTypeDef *hfdcan, CommandMode CMDmode, uint8_t DriverNum,
         int32_t VelLimit, int32_t TrqLimit, float CurLimit)
 {
@@ -620,6 +644,7 @@ HAL_StatusTypeDef SetLimits(FDCAN_HandleTypeDef *hfdcan, CommandMode CMDmode, ui
 * @param  AccLimit：加速度限制(脉冲/s^2)，范围：0 ~ 1024*4096（不想设置就给 -1）
 * @param  DecLimit：减速度限制(脉冲/s^2)，范围：0 ~ 1024*4096（不想设置就给 -1）
 */
+/* 函数：配置普通驱动器速度加减速参数；工程内未发现有效调用点。 */
 HAL_StatusTypeDef SetVelAcc(FDCAN_HandleTypeDef *hfdcan, CommandMode CMDmode, uint8_t DriverNum,
         int32_t AccLimit, int32_t DecLimit)
 {
@@ -676,6 +701,7 @@ HAL_StatusTypeDef SetVelAcc(FDCAN_HandleTypeDef *hfdcan, CommandMode CMDmode, ui
  *        byte(6) kd[7:0]
  *        byte(7) t[7:0]
  */
+/* 函数：向普通驱动器发送 PVT 位置、速度、增益及前馈量；DriverControl 的 PVT 模式调用。 */
 HAL_StatusTypeDef PVTCtrl(FDCAN_HandleTypeDef *hfdcan, uint8_t DriverNum, float pos, float vel, float kp, float kd, float t)
 {
     uint32_t canId    = DRIVER_SERVER_BASE_ID + DriverNum;
@@ -721,6 +747,7 @@ HAL_StatusTypeDef PVTCtrl(FDCAN_HandleTypeDef *hfdcan, uint8_t DriverNum, float 
 * @author YYY
 * @note   单位：脉冲
 */
+/* 函数：请求读取普通驱动器 PVT 返回数据；当前 DriverControl 禁用模式分支调用。 */
 HAL_StatusTypeDef ReadPVT(FDCAN_HandleTypeDef *hfdcan, CommandMode CMDmode, uint8_t DriverNum)
 {
     uint32_t canId    = DRIVER_SERVER_BASE_ID + CMDmode + DriverNum;
@@ -745,6 +772,7 @@ HAL_StatusTypeDef ReadPVT(FDCAN_HandleTypeDef *hfdcan, CommandMode CMDmode, uint
 * @author YYY
 * @note   单位：脉冲，A * 1000
 */
+/* 函数：请求读取普通驱动器状态；工程内未发现有效调用点。 */
 HAL_StatusTypeDef ReadDriverStatus(FDCAN_HandleTypeDef *hfdcan, CommandMode CMDmode, uint8_t DriverNum)
 {
     uint32_t canId    = DRIVER_SERVER_BASE_ID + CMDmode + DriverNum;
@@ -758,6 +786,7 @@ HAL_StatusTypeDef ReadDriverStatus(FDCAN_HandleTypeDef *hfdcan, CommandMode CMDm
     return User_FDCAN_SendMsg(hfdcan, data, 32, canId, 0);
 }
 
+/* 函数：请求普通驱动器设定当前位置为零点；工程内调用仅见注释回零代码，当前未启用。 */
 HAL_StatusTypeDef SetDriverZero(FDCAN_HandleTypeDef *hfdcan, CommandMode CMDmode, uint8_t DriverNum)
 {
     uint32_t canId    = DRIVER_SERVER_BASE_ID + CMDmode + DriverNum;

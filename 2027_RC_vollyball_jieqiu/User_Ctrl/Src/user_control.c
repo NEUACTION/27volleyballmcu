@@ -1,18 +1,45 @@
 #include "user_control.h"
 #include "user_usart.h"
 
+/* 全局变量：设备心跳计数；接收回调清零，周期逻辑递增。 */
 Heart_t HB;
 
-driverMsg_t leg1Msg, leg2Msg, leg3Msg, leg4Msg, wheel1Msg, wheel2Msg, wheel3Msg, wheel4Msg, shoulderMsg, elbowMsg, wristMsg;
+/* 全局反馈：以下消息对象由对应驱动器接收解析更新。 */
+driverMsg_t leg1Msg, /* 腿部电机 1 反馈；当前接收分支更新。 */
+            leg2Msg, /* 腿部电机 2 反馈；当前接收分支更新。 */
+            leg3Msg, /* 腿部电机 3 反馈；当前接收分支更新。 */
+            leg4Msg, /* 腿部电机 4 反馈；当前接收分支更新。 */
+            wheel1Msg, /* 轮子 1 反馈；当前接收解析分支屏蔽。 */
+            wheel2Msg, /* 轮子 2 反馈；当前接收解析分支屏蔽。 */
+            wheel3Msg, /* 轮子 3 反馈；当前接收解析分支屏蔽。 */
+            wheel4Msg, /* 轮子 4 反馈；当前接收解析分支屏蔽。 */
+            shoulderMsg, /* 肩部反馈；接收解析分支当前屏蔽。 */
+            elbowMsg, /* 肘部反馈；接收解析分支当前屏蔽。 */
+            wristMsg; /* 腕部反馈；接收解析分支当前屏蔽。 */
 
-motorTarget_t leg1Tar, leg2Tar, leg3Tar, leg4Tar, wheel1Tar, wheel2Tar, wheel3Tar, wheel4Tar, shoulderTar, elbowTar, wristTar;
+/* 全局目标：以下对象由任务填写，电机控制路径读取。 */
+motorTarget_t leg1Tar, /* 腿部电机 1 目标；当前任务控制使用。 */
+              leg2Tar, /* 腿部电机 2 目标；当前任务控制使用。 */
+              leg3Tar, /* 腿部电机 3 目标；当前任务控制使用。 */
+              leg4Tar, /* 腿部电机 4 目标；当前任务控制使用。 */
+              wheel1Tar, /* 轮子 1 目标；当前有效控制路径可能屏蔽。 */
+              wheel2Tar, /* 轮子 2 目标；当前有效控制路径可能屏蔽。 */
+              wheel3Tar, /* 轮子 3 目标；当前有效控制路径可能屏蔽。 */
+              wheel4Tar, /* 轮子 4 目标；当前有效控制路径可能屏蔽。 */
+              shoulderTar, /* 肩部目标；当前任务赋值/发送路径需进一步确认。 */
+              elbowTar, /* 肘部目标；当前任务赋值/发送路径需进一步确认。 */
+              wristTar; /* 腕部目标；当前任务赋值/发送路径需进一步确认。 */
 
+/* 全局快照：保存一组驱动反馈及采样时刻；由快照接口写入，调用方读取。 */
 DriverMsgsSnapshot_t driverMsgs;
 
+/* 全局机器人状态：供各控制任务共享机器人模式与状态；当前启用。 */
 gRobot_t gRobot;
 
+/* 全局电调输出比较值；由 EscControl 写入 TIM8 通道 4，当前启用。 */
 int esc = 0;
 
+/* 函数：在临界区内复制驱动反馈并记录系统 Tick；空输出指针时不操作。 */
 void User_Control_GetDriverMsgsSnapshot(DriverMsgsSnapshot_t *out)
 {
 	if (out == NULL)
@@ -23,6 +50,7 @@ void User_Control_GetDriverMsgsSnapshot(DriverMsgsSnapshot_t *out)
 	/* 关中断拷贝，避免结构体撕裂（rxTask 正在更新时被读到一半） */
 	taskENTER_CRITICAL();
 	{
+		/* tick 记录快照复制时的 RTOS 时间，供上层判断数据新鲜度。 */
 		out->leg1Msg  = leg1Msg;
         out->leg2Msg  = leg2Msg;
         out->leg3Msg  = leg3Msg;
@@ -47,6 +75,7 @@ void User_Control_GetDriverMsgsSnapshot(DriverMsgsSnapshot_t *out)
  * 该函数用于初始化机器人各个部件的状态和模式
  * 包括腿部、轮子、肩部、肘部和腕部的初始设置
  */
+/* 函数：初始化腿、轮和上肢驱动的使能/模式/清理状态；腿轮默认禁用，上肢关节默认位置模式。 */
 void RobotInit(void)
 {
 
@@ -149,6 +178,7 @@ void RobotInit(void)
 /**
  * @brief IO口控制
  */
+/* 函数：GPIO 控制预留入口；当前函数体为空，未执行具体输出控制。 */
 void GPIOControl(void)
 {
 
@@ -160,6 +190,7 @@ void GPIOControl(void)
  * @param driverNum 驱动器ID
  * @param driverTarget 驱动器期望
  */
+/* 函数：按目标模式变化切换达妙电机使能状态，否则发送位置/速度目标；当前用于达妙驱动路径。 */
 void DMControl(FDCAN_HandleTypeDef *hfdcan, uint32_t driverNum, motorTarget_t *driverTarget)
 {
     if(driverTarget->mode != driverTarget->last_mode)
@@ -187,8 +218,10 @@ void DMControl(FDCAN_HandleTypeDef *hfdcan, uint32_t driverNum, motorTarget_t *d
  * @param driverTarget 驱动器期望
  * @param driverMsg 驱动器消息
  */
+/* 函数：处理普通驱动器使能和速度/位置/PVT命令；mode 0-3 选择禁用、速度、位置、PVT，旧的备选逻辑保持屏蔽。 */
 void DriverControl(FDCAN_HandleTypeDef *hfdcan, uint32_t driverNum, motorTarget_t *driverTarget, driverMsg_t *driverMsg)
 {
+	/* 当前 mode 与 last_mode 用于模式切换；反馈 enableState 和错误计数决定是否重发使能状态。 */
 	if(driverTarget->mode != driverTarget->last_mode)
 	{
         //控制状态切换
@@ -314,6 +347,7 @@ void DriverControl(FDCAN_HandleTypeDef *hfdcan, uint32_t driverNum, motorTarget_
 /**
  * @brief 心跳包计数
  */
+/* 函数：将所有执行器和通信心跳计数饱和递增至 201；周期调用以便接收侧清零。 */
 void HB_Add(void)
 {
 	if(HB.leg1 <= 200)HB.leg1 ++;
@@ -335,6 +369,7 @@ void HB_Add(void)
  * @brief 驱动器复位
  * @return 是否复位完成（可以开始正常控制了）
  */
+/* 函数：轮询四条腿的回零完成标志；旧的直接复位及肘腕回零代码处于注释屏蔽状态。 */
 bool reset_control(void)
 {
     // static int reset_flag = 0;
@@ -398,6 +433,7 @@ bool reset_control(void)
 /**
  * @brief 电调控制
  */
+/* 函数：将全局 esc 值写入 TIM8 通道 4；当前启用。 */
 void EscControl(void)
 {
 	__HAL_TIM_SET_COMPARE(&htim8, TIM_CHANNEL_4, esc);
@@ -423,6 +459,7 @@ void EscControl(void)
 //     DMControl(&FDCAN_TK, ELBOW, &elbowTar);
 // }
 
+/* 函数：按顺序发送气阀、GPIO、电机和电调控制；当前机器人控制调度入口。 */
 void RobotControl(void)
 {
     SendValve();
@@ -434,6 +471,7 @@ void RobotControl(void)
 /**
  * @brief 紧急停车
  */
+/* 函数：紧急停车预留接口；当前函数体为空，不执行停车动作。 */
 void ErrorStop(void)
 {
 
@@ -443,6 +481,7 @@ void ErrorStop(void)
 /**
  * @brief 紧急失能
  */
+/* 函数：全局失能预留接口；当前函数体为空，不执行失能动作。 */
 void DisableAll(void)
 {
     

@@ -1,27 +1,45 @@
+/*数学计算模块
+*目前分三种模式，梯形规划，五次多项式1,2
+*有π的宏定义
+*/
+
 #include <math.h>
 #include "zlr_math.h"
 
+/* 宏：圆周率常量，供连杆几何和角度换算使用；当前计算路径启用。 */
 #define PI       3.14159265358979323846
+/* 宏：六十度对应的弧度值，用于电机圈数与角度互换；当前计算路径启用。 */
 #define PI_3     (PI / 3.0)
 
+/* 静态常量：机构连杆长度，参与正逆运动学；当前启用。 */
 static const double LINK_LENGTH = 210.0;
+/* 静态常量：几何偏置半径，参与正逆运动学；当前启用。 */
 static const double OFFSET_RADIUS = 20.0;
+/* 静态常量：机构高度零点偏移，参与高度换算；当前启用。 */
 static const double HEIGHT_OFFSET = 59.46128;
+/* 静态常量：规划终点总行程高度，供轨迹边界限幅；当前启用。 */
 static const double TOTAL_H = 277.13;
+/* 静态常量：匀速段平台速度，供各轨迹模式计算时间和速度；当前启用。 */
 static const double V_CONST = 1000.0;
 
+/* 全局变量：梯形/FIVE1 轨迹参数；仅 T 或 FIVE1 模式读取，其他模式不使用。 */
 MotionProfile profile;
+/* 全局变量：FIVE2 角度域轨迹参数；仅 FIVE2 模式读取，其他模式不使用。 */
 ThetaProfile tp;
 
+/* 函数：由机构角度计算平台高度；供轨迹边界搜索使用，当前启用。 */
 static double get_h_by_theta(double theta)
 {
+    /* phi 为连杆夹角，root 为几何闭环平方根项；均为本次正运动学计算的临时量。 */
     double phi = 5.0 * PI / 9.0 - theta;
     double root = sqrt(44100.0 - pow(210.0 * sin(phi) - 20.0, 2.0));
     return 210.0 * cos(phi) + root - HEIGHT_OFFSET;
 }
 
+/* 函数：由平台高度反解电机圈数；被位置、速度规划接口调用，当前启用。 */
 static double get_revs_by_h(double h)
 {
+    /* d/root/acos_arg 用于逆几何求角；对 acos_arg 限幅以维持反余弦定义域。 */
     double d = h + HEIGHT_OFFSET;
     double root = sqrt(d * d + OFFSET_RADIUS * OFFSET_RADIUS);
     double acos_arg = root / (2.0 * LINK_LENGTH);
@@ -39,8 +57,10 @@ static double get_revs_by_h(double h)
     return theta / PI_3;
 }
 
+/* 函数：计算高度对角度的雅可比绝对值；供轨迹速度换算和边界搜索使用。 */
 double get_J(double theta)
 {
+    /* term/root 和导数项组成机构雅可比，返回高度对角度变化率的绝对值。 */
     double phi = 5.0 * PI / 9.0 - theta;
     double sin_phi = sin(phi);
     double cos_phi = cos(phi);
@@ -51,8 +71,10 @@ double get_J(double theta)
     return fabs(dh_dphi);
 }
 
+/* 函数：扫描雅可比并求匀速段起止高度；初始化轨迹时调用。 */
 static void find_const_heights(double *h_start, double *h_end)
 {
+    /* step/max_j 用于扫描最大雅可比，threshold 取其 90% 作为匀速段边界判据。 */
     const double step = 0.0001;
     double max_j = 0.0;
     double theta;
@@ -91,12 +113,14 @@ static void find_const_heights(double *h_start, double *h_end)
 }
 
 #if defined(FIVE2)
+/* 函数：用中心差分估算雅可比导数；仅 FIVE2 模式编译并使用。 */
 static double get_J_prime(double theta)
 {
     const double step = 1e-6;
     return (get_J(theta + step) - get_J(theta - step)) / (2.0 * step);
 }
 
+/* 函数：依据端点位移、速度、加速度和时长求五次多项式高阶系数；仅 FIVE2 模式使用。 */
 static void solve_5th_coeffs(double d_theta, double v1, double a1, double duration,
                              double *c3, double *c4, double *c5)
 {
@@ -113,6 +137,7 @@ static void solve_5th_coeffs(double d_theta, double v1, double a1, double durati
 }
 #endif
 
+/* 函数：初始化所选运动规划模式的时间、边界及多项式系数；需在查询轨迹前调用。 */
 void init_theta_profile(void)
 {
     double h_start;
@@ -121,6 +146,7 @@ void init_theta_profile(void)
     find_const_heights(&h_start, &h_end);
 
 #if defined(T) || defined(FIVE1)
+/* 初始化局部行程量分别表示加速、匀速、减速位移；仅当前选中的 T/FIVE1 轨迹模式使用。 */
     double s_acc = h_start;
     double s_const = h_end - h_start;
     double s_dec = TOTAL_H - h_end;
@@ -152,6 +178,7 @@ void init_theta_profile(void)
 #endif
 
 #elif defined(FIVE2)
+    /* FIVE2 的角度端点和局部边界状态只在该编译模式下构造。 */
     tp.h_start_const = h_start;
     tp.t_acc = 2.0 * h_start / V_CONST;
     tp.t_const = (h_end - h_start) / V_CONST;
@@ -195,6 +222,7 @@ void init_theta_profile(void)
 }
 
 #if defined(T) || defined(FIVE1)
+/* 函数：按 T/FIVE1 模式计算指定时刻的平台高度；其他模式下不编译。 */
 static double get_profile_height(double t)
 {
     if (t <= 0.0) {
@@ -231,6 +259,7 @@ static double get_profile_height(double t)
     return TOTAL_H;
 }
 
+/* 函数：按 T/FIVE1 模式计算指定时刻的平台速度；其他模式下不编译。 */
 static double get_plate_velocity(double t)
 {
     if ((t < 0.0) ||
@@ -264,9 +293,11 @@ static double get_plate_velocity(double t)
 }
 #endif
 
+/* 函数：返回指定时刻的电机目标圈数；按当前编译模式选择轨迹分段。 */
 double get_motor_revs_theta_plan(double t)
 {
 #if defined(T) || defined(FIVE1)
+    /* h 是高度域轨迹值，限幅到机构有效总行程后再换算为电机圈数。 */
     double h = get_profile_height(t);
     if (h < 0.0) {
         h = 0.0;
@@ -279,6 +310,7 @@ double get_motor_revs_theta_plan(double t)
         return get_revs_by_h(0.0);
     }
 
+    /* theta_rad 暂存加速/减速段多项式角度；匀速段直接由高度反算并提前返回。 */
     double theta_rad;
     if (t <= tp.t_acc) 
     {
@@ -318,9 +350,11 @@ double get_motor_revs_theta_plan(double t)
 #endif
 }
 
+/* 函数：返回指定时刻的电机目标速度；T/FIVE1/FIVE2 分别走各自计算分支。 */
 double get_motor_vel_at_time(double t)
 {
 #if defined(T) || defined(FIVE1)
+    /* plate_velocity 为平台线速度，先检查方向/边界，再用雅可比换算电机角速度。 */
     double h;
     double plate_velocity = get_plate_velocity(t);
 

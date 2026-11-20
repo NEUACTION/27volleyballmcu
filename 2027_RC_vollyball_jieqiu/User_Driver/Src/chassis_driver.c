@@ -12,8 +12,10 @@
  * @param  hsv_cmd: 舵轮灯板颜色 H: 0 ~ 180 S: 0 ~ 255 V: 0 ~ 255
  * @author ACTION
  */
+/* 函数：限幅并打包舵轮位置、速度和 HSV 灯色后发送；工程内未发现有效调用点。 */
 void SteeringWheelCtrl(FDCAN_HandleTypeDef* hfdcan, uint8_t DriverNum, float velAim, float PosAim, HSV_Cmd hsv_cmd)
 {
+    /* stdId 由驱动器编号加服务基址构成；vel/pos 是经过限幅和单位缩放的帧内整数。 */
     uint32_t stdId = DriverNum + DRIVER_SERVER_BASE_ID;
     int32_t vel = 0;
     int32_t pos = 0;
@@ -63,9 +65,11 @@ void SteeringWheelCtrl(FDCAN_HandleTypeDef* hfdcan, uint8_t DriverNum, float vel
  * @author ZBW
  * @note	  
  */
+/* 函数：打包舵轮加速度、限流、状态和积分清除位并发送；工程内未发现有效调用点。 */
 void DriverStateChassis(FDCAN_HandleTypeDef* hfdcan, CommandMode CMDmode, uint8_t DriverNum, ACC_MODE acc_mode,     \
                 CurrQLim_Mode ILIMmode, DriverState_Mode wheelstate, DriverState_Mode turnstate, uint8_t clearintergral)
 {
+    /* stdId 标识目标驱动器/命令模式；data 编码状态位并作为本次 CAN 负载。 */
     uint32_t stdId = DriverNum + CMDmode + DRIVER_SERVER_BASE_ID;
     uint8_t data[16] = {};
 
@@ -84,6 +88,7 @@ void DriverStateChassis(FDCAN_HandleTypeDef* hfdcan, CommandMode CMDmode, uint8_
  * @param  data8: 接收驱动器消息数组的首地址
  * @author ACTION
  */
+/* 函数：按反馈标识解析舵轮位置、速度或状态；空参数时返回，工程内未发现有效调用点。 */
 void GetSteeringWheelMsg(SteeringWheelMsg_t *driverMsg, const uint8_t *data8)
 {
     if ((driverMsg == NULL) || (data8 == NULL))
@@ -91,6 +96,7 @@ void GetSteeringWheelMsg(SteeringWheelMsg_t *driverMsg, const uint8_t *data8)
         return;
     }
 
+    /* identifier 决定当前帧更新位置、速度还是状态字段；未知标识不修改反馈结构。 */
     uint32_t identifier = data8[0];
     switch (identifier)
     {
