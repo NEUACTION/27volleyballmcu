@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>action_planner</name>
+  <version>0.1.0</version>
+  <description>每5ms在线计算并发布排球机构目标的ROS2节点。</description>
+  <maintainer email="maintainer@example.com">maintainer</maintainer>
+  <license>Apache-2.0</license>
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <depend>rclcpp</depend>
+  <depend>base_interfaces</depend>
+  <depend>planner</depend>
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+  <exec_depend>mcu</exec_depend>
+  <export><build_type>ament_cmake</build_type></export>
+</package>
