@@ -71,6 +71,8 @@ typedef struct
 {
 	/* 舵轮反馈速度；单位按舵轮协议定义。 */
 	float vel;
+    float vel_cur;
+    float pos_cur;
 	/* 舵轮反馈位置；当前解析以 0.1 单位还原。 */
 	float pos;	
     /* 舵轮驱动器当前状态；由状态反馈标识更新。 */

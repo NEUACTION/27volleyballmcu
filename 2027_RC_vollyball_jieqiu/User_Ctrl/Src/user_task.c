@@ -6,6 +6,7 @@
 #include "vofa.h"
 #include "zlr_math.h"
 
+/* 回调：在 FDCAN 接收任务上下文解析腿部反馈；当前仅 FDCAN_WL 的 LEG1-LEG4 分支启用，轮和 FDCAN_TK 解析保持屏蔽。 */
 /* 驱动器回报帧 StdId 规则：StdId = 0x280 + DriverNum */
 /* 函数：将反馈帧标准 ID 转换为驱动器编号；肘腕直接取 ID，其余按基址偏移，非法范围返回错误。 */
 static int Fdcan_ReportStdIdToDriverNum(uint32_t stdId, uint8_t *outDriverNum)
@@ -15,27 +16,14 @@ static int Fdcan_ReportStdIdToDriverNum(uint32_t stdId, uint8_t *outDriverNum)
 		return -1;
 	}
 	
-	if (stdId == ELBOW || stdId == WRIST)
-	{
-		/* dn 是待输出的驱动器编号；仅接受协议支持的 1-64 范围。 */
-		const uint32_t dn = stdId;
+	const uint32_t dn = stdId - DRIVER_CLIENT_BASE_ID;
 		if ((dn < 1U) || (dn > 64U))
 		{
 			return -1;
 		}
 		*outDriverNum = (uint8_t)dn;
 		return 0;
-	}
-	else
-	{
-		const uint32_t dn = stdId - DRIVER_CLIENT_BASE_ID;
-		if ((dn < 1U) || (dn > 64U))
-		{
-			return -1;
-		}
-		*outDriverNum = (uint8_t)dn;
-		return 0;
-	}
+	
 }
 
 /* RXtask 上下文解析：FDCAN1 / FDCAN3 解析函数不同也没问题，在这里分发即可 */
@@ -60,34 +48,23 @@ static void User_FDCAN_RxTaskParse(const UserFDCAN_RxMsg_t *msg)
 	{
 		const uint8_t *msg_data = msg->data + i * 8;
 		/* FDCAN1: 上层 CAN（UP_FDCAN）解析：TURN/ROLLER */
-		if (msg->bus == &FDCAN_WL)
+		if (msg->bus == &hfdcan1)
 		{
 			switch (dn)
 			{
-				// case WHEEL1:
-				// {
-				// 	GetDriverMsg(&wheel1Msg, msg_data);
-				// 	HB.wheel1 = 0;	// 收到消息就把对应心跳包清零
-				// 	break;
-				// }
-				// case WHEEL2:
-				// {
-				// 	GetDriverMsg(&wheel2Msg, msg_data);
-				// 	HB.wheel2 = 0;
-				// 	break;
-				// }
-				// case WHEEL3:
-				// {
-				// 	GetDriverMsg(&wheel3Msg, msg_data);
-				// 	HB.wheel3 = 0;
-				// 	break;
-				// }
-				// case WHEEL4:
-				// {
-				// 	GetDriverMsg(&wheel4Msg, msg_data);
-				// 	HB.wheel4 = 0;
-				// 	break;
-				// }
+				case WHEEL1://11
+				{
+					GetSteeringWheelMsg(&wheel1Msg, msg_data);
+					HB.wheel1 = 0;	// 收到消息就把对应心跳包清零
+					break;
+				}
+				case WHEEL2://12
+				{
+					GetSteeringWheelMsg(&wheel2Msg, msg_data);
+					HB.wheel2 = 0;
+					break;
+				}
+				
 				case LEG1:
 				{
 					GetDriverMsg(&leg1Msg, msg_data);
@@ -112,6 +89,7 @@ static void User_FDCAN_RxTaskParse(const UserFDCAN_RxMsg_t *msg)
 					HB.leg4 = 0;
 					break;
 				}
+				
 				default:
 				{
 					break;
@@ -119,41 +97,53 @@ static void User_FDCAN_RxTaskParse(const UserFDCAN_RxMsg_t *msg)
 			}
 		}
 	
-		/* FDCAN3: 轮子 CAN（WHEEL_FDCAN）解析：ONE/TWO/THR */
-		// if (msg->bus == &FDCAN_TK)
-		// {
-		// 	switch (dn)
-		// 	{
-		// 		case LEG2:
-		// 		{
-		// 			GetDriverMsg(&leg2Msg, msg_data);
-		// 			HB.leg2 = 0;
-		// 			break;
-		// 		}
-		// 		case SHOULDER:
-		// 		{
-		// 			GetDriverMsg(&shoulderMsg, msg_data);
-		// 			HB.shoulder = 0;
-		// 			break;
-		// 		}
-		// 		case ELBOW:
-		// 		{
-		// 			DMGetMotorMsg(&elbowMsg, msg_data);
-		// 			HB.elbow = 0;
-		// 			break;
-		// 		}
-		// 		case WRIST:
-		// 		{
-		// 			DMGetMotorMsg(&wristMsg, msg_data);
-		// 			HB.wrist = 0;
-		// 			break;
-		// 		}
-		// 		default:
-		// 		{
-		// 			break;
-		// 		}
-		// 	}
-		// }
+		/* FDCAN1: 轮子 CAN（WHEEL_FDCAN） */
+		if (msg->bus == &hfdcan3)
+		{
+			switch (dn)
+			{
+				case WHEEL3://9
+				{
+					GetSteeringWheelMsg(&wheel3Msg, msg_data);
+					HB.wheel3 = 0;
+					break;
+				}
+				case WHEEL4://10
+				{
+					GetSteeringWheelMsg(&wheel4Msg, msg_data);
+					HB.wheel4 = 0;
+					break;
+				}
+				case SLIDE:
+				{
+					GetDriverMsg(&slideMsg, msg_data);
+					HB.slide = 0;
+					break;
+				}
+				case PLATE:
+				{
+					GetDriverMsg(&plateMsg, msg_data);
+					HB.plate = 0;
+					break;
+				}
+				case ARM1:
+				{
+					GetDriverMsg(&arm1Msg, msg_data);
+					HB.arm1 = 0;
+					break;
+				}
+				case ARM2:
+				{
+					GetDriverMsg(&arm2Msg, msg_data);
+					HB.arm2 = 0;
+					break;
+				}
+				default:
+				{
+					break;
+				}
+			}
+		}
 	}
 
 }
@@ -215,7 +205,8 @@ uint8_t Beep(uint32_t time)
 /* 全局变量：待执行蜂鸣的剩余节拍计数；Beep_Control 每次调用递减。 */
 uint32_t Beep_Time = 0;
 /* 函数：设置蜂鸣剩余节拍数；调用后由周期任务执行 Beep_Control 消耗。 */
-void SetBeep(uint32_t time){
+void SetBeep(uint32_t time)
+{
     Beep_Time = time;
 }
 /* 函数：根据 Beep_Time 控制蜂鸣器 GPIO；当前由用户任务周期调用。 */
@@ -259,8 +250,8 @@ void User_Task_Init(void)
 
 	// 注册FDCAN回调
 	User_FDCAN_RegisterRxCallback(User_FDCAN_RxTaskParse);
-	// 注册USB回调：在 UsbRxTask 上下文解析PC帧（GetPCMsg 当前已注释，恢复时一并打开）
-	// UsbRx_RegisterCallback(GetPCMsg);
+	// 注册USB回调：在 UsbRxTask 上下文解析PC帧
+	UsbRx_RegisterCallback(GetPCMsg);
 
 	// 设置驱动器初始状态
 	RobotInit();
@@ -325,281 +316,108 @@ void User_Task(void *argument)
 		/* 这里写每 5ms 需要执行的逻辑 */
 
 		// 心跳包自增
-		// HB_Add();
+		HB_Add();
 		static int cntTest = 0;
 		cntTest++;
-
+		GetPSNum();
 		// if(gRobot.runSucceedFlag)
 		// {
-		// 	// 复位
-		// DEBUG("%f\r\n", );
+
+/*阶段0复位*/
 			if(!reset_flag)
 			{
-				// SetDriverState(&hfdcan3, PTP_MODE, LEG1, ENABLE);
-				// SetDriverState(&hfdcan3, PTP_MODE, LEG2, ENABLE);
-				// SetDriverState(&hfdcan3, PTP_MODE, LEG3, ENABLE);
-				// SetDriverState(&hfdcan3, PTP_MODE, LEG4, ENABLE);
-
-				// SetBeep(100);
-
 				reset_flag = reset_control();
-
-				if(reset_flag)
-				{
-					// SetDriverState(&hfdcan3, PTP_MODE, LEG1, DISABLE);
-					// SetDriverState(&hfdcan3, PTP_MODE, LEG2, DISABLE);
-					// SetDriverState(&hfdcan3, PTP_MODE, LEG3, DISABLE);
-					// SetDriverState(&hfdcan3, PTP_MODE, LEG4, DISABLE);
-				}
 				continue;
 			} // 复位完成后才执行正常控制逻辑
-			
-			static bool change_flag = 0;
-			if(!change_flag)
-			{	
-				SetDriverMode(&hfdcan3, PTP_MODE , LEG1 , POS_MODE ,0);
-				SetDriverMode(&hfdcan3, PTP_MODE , LEG2 , POS_MODE ,0);
-				SetDriverMode(&hfdcan3, PTP_MODE , LEG3 , POS_MODE ,0);
-				SetDriverMode(&hfdcan3, PTP_MODE , LEG4 , POS_MODE ,0);
-
-				
-				// SetDriverState(&hfdcan3, PTP_MODE, LEG1, ENABLE);
-				// SetDriverState(&hfdcan3, PTP_MODE, LEG2, ENABLE);
-				// SetDriverState(&hfdcan3, PTP_MODE, LEG3, ENABLE);
-				// SetDriverState(&hfdcan3, PTP_MODE, LEG4, ENABLE);
-				change_flag = 1;
-				continue;
-			}
-			static bool waiting_flag = 0;
-			static uint32_t waiting_cnt = 0;
-			if(!waiting_flag)
-			{
-				waiting_cnt++;
-				if(waiting_cnt > 100)
-				{
-					waiting_flag = 1;
-				}
-			}
-			else
-			{
-				// gethit_pos();
-				getHitPos();
-				Leg_PosCtrl(leg1Tar.pos, leg2Tar.pos, leg3Tar.pos, leg4Tar.pos);
-			}
-				// PosCtrl(&FDCAN_WL, PTP_MODE, LEG1, (int32_t)(leg1Tar.pos * 4096.f), 2.0, 0.15);
-				// PosCtrl(&FDCAN_WL, PTP_MODE, LEG2, (int32_t)(leg2Tar.pos * 4096.f), 2.0, 0.15);
-				// PosCtrl(&FDCAN_WL, PTP_MODE, LEG3, (int32_t)(leg3Tar.pos * 4096.f), 2.0, 0.15);
-				// PosCtrl(&FDCAN_WL, PTP_MODE, LEG4, (int32_t)(leg4Tar.pos * 4096.f), 2.0, 0.15);
-			
-			tarVel = (lastTarPos1 - leg1Tar.pos) / 0.005;
-			lastTarPos1 = leg1Tar.pos;
-			DEBUG("%d %f  %f %f %f %f %f %f %f %f %f %f %f %f %f %d %d %d %d\r\n" , cntTest, -leg1Tar.pos,
-				 -leg1Msg.pos, leg2Msg.pos, -leg3Msg.pos, leg4Msg.pos,
-				  tarVel,-leg1Msg.vel, leg2Msg.vel, -leg3Msg.vel,
-				   leg4Msg.vel, leg1Msg.currQ, leg2Msg.currQ, leg3Msg.currQ, leg4Msg.currQ,
-					leg1Msg.error, leg2Msg.error, leg3Msg.error, leg4Msg.error);
+			/*一阶段，成功返回ok,舵轮到常位，腿使能和控制模式，臂抬起且等完，放好球，按下开关*/
+			changeMode();
 			
 			
+		// 		// gethit_pos();
+		// 		getHitPos();
+		// 		Leg_PosCtrl();
 			
+		// 		// PosCtrl(&FDCAN_WL, PTP_MODE, LEG1, (int32_t)(leg1Tar.pos * 4096.f), 2.0, 0.15);
+		// 		// PosCtrl(&FDCAN_WL, PTP_MODE, LEG2, (int32_t)(leg2Tar.pos * 4096.f), 2.0, 0.15);
+		// 		// PosCtrl(&FDCAN_WL, PTP_MODE, LEG3, (int32_t)(leg3Tar.pos * 4096.f), 2.0, 0.15);
+		// 		// PosCtrl(&FDCAN_WL, PTP_MODE, LEG4, (int32_t)(leg4Tar.pos * 4096.f), 2.0, 0.15);
 			
-			  	// static float LEGTarPos = 0.76;
-				// static float dpos = 0.002f;
+		// tarVel = (lastTarPos1 - leg1Tar.pos) / 0.005;
+		// lastTarPos1 = leg1Tar.pos;
+		// DEBUG("%d %f  %f %f %f %f %f %f %f %f %f %f %f %f %f %d %d %d %d\r\n" , cntTest, -leg1Tar.pos,
+		// 		-leg1Msg.pos, leg2Msg.pos, -leg3Msg.pos, leg4Msg.pos,
+		// 		tarVel,-leg1Msg.vel, leg2Msg.vel, -leg3Msg.vel,
+		// 		leg4Msg.vel, leg1Msg.currQ, leg2Msg.currQ, leg3Msg.currQ, leg4Msg.currQ,
+		// 		leg1Msg.error, leg2Msg.error, leg3Msg.error, leg4Msg.error);
 
-				// static float DLimitPos = 5.f / 360.f;
-
-				// static int tim_cnt1 = 0;
-				// static int LEGs[4] = {LEG1, LEG2, LEG3, LEG4};
-				// static float LEGsPos[4] = {0, 0, 0, 0};
-				// static bool end_flag = 0;
-
-				// tim_cnt1++;
-
-				// if (tim_cnt1 >= 150)
-				// {
-				// 	if(fabsf((LEGsPos[1] - LEGTarPos)) == 0.f)
-				// 	{
-				// 		for(int i = 0; i < 4; i++)
-				// 		{
-				// 			SetDriverState(&hfdcan3, PTP_MODE, LEGs[i], DISABLE);
-				// 		}
-				// 		end_flag = 1;
-				// 	}
-
-				// 		LEGsPos[0] -= dpos;
-				// 		LEGsPos[1] += dpos;
-				// 		LEGsPos[2] -= dpos;
-				// 		LEGsPos[3] += dpos;
-					
-				// 	if(end_flag == 1)
-				// 	{
-				// 		LEGsPos[0] = -LEGTarPos;
-				// 		LEGsPos[1] = LEGTarPos;
-				// 		LEGsPos[2] = -LEGTarPos;
-				// 		LEGsPos[3] = LEGTarPos;
-				// 	}
-
-				// 	if(fabsf(leg1Msg.pos - leg3Msg.pos) > DLimitPos)
-				// 	{
-				// 		SetDriverState(&hfdcan3, PTP_MODE, LEG1, DISABLE);
-				// 	}
-				// 	else if(fabsf(leg2Msg.pos - leg4Msg.pos) > DLimitPos)
-				// 	{
-				// 		SetDriverState(&hfdcan3, PTP_MODE, LEG2, DISABLE);
-				// 	}
-
-				// 	for(int i = 0; i < 4; i++)
-				// 	{
-				// 		PosCtrl(&FDCAN_WL, PTP_MODE, LEGs[i], (int32_t)(LEGsPos[i] * 4096.f), 2.0, 0.15);
-				// 	}
-
-				// }
-				// else
-				// {
-				// 	SetDriverState(&hfdcan3, PTP_MODE, WHEEL2, ENABLE);
-				// 	SetDriverState(&hfdcan3, PTP_MODE, WHEEL3, ENABLE);
-				// }
-				
-
-				//DEBUG("%f, %f, %f, %f, %f, %f, %f, %f\r\n" , LEGsPos[0], LEGsPos[1], LEGsPos[2], LEGsPos[3], leg1Msg.pos, leg2Msg.pos, leg3Msg.pos, leg4Msg.pos);
-		
-			/* 机器人控制 */
-			// gRobot.reset_flag = 1;
-			// Start_Info();
-			// RobotControl();
-
-		
-		// RobotControl();
-
-		// DEBUG("%d, %d, %d, %d\r\n", wheel1Tar.clean, wheel2Tar.clean, wheel3Tar.clean, wheel4Tar.clean);
-
-		// static int cnt = 0;
-		// if (cnt == 0)
-		// {
-		// 	SetDriverMode(&FDCAN_WL, PTP_MODE, LEG4, POS_MODE, (int32_t)(cnt * 4096.f));
-		// }
-		// cnt++;
-		// SetStateAndPosCtrl(&FDCAN_WL, PTP_MODE, LEG4, ENABLE, (int32_t)(cnt * 4096.f));
-
-		// valve_num[0] = 1;
-		// valve_num[5] = 1;
-		// SendValve();
-		// valve_num[3] = 1;
-		// static int valve_cnt = 0;
-		// valve_cnt++;
-		// if (valve_cnt < 25)
-		// {
-		// 	valve_num[9] = 1;
-		// }
-		// else if (valve_cnt < 50)
-		// {
-		// 	valve_num[9] = 0;
-		// }
-		// else
-		// {
-		// 	valve_cnt = 0;
-		// }
-		// SendValve();
-
-		// MotorControl();
-
-		// static int flag = 0;
-		// if(flag == 0)
-		// {
-		// 	leg4Tar.mode = 0;
-		// 	flag = 1;
-		// }
-		// else if (flag == 1)
-		// {
-		// 	leg4Tar.mode = 2;
-		// 	flag = 0;
-		// }
-
-		// DEBUG("%d\r\n", leg4Msg.enableState);
-		// DEBUG("%d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d\r\n", ps_num[0], ps_num[1], ps_num[2], ps_num[3], ps_num[4], ps_num[5], ps_num[6], ps_num[7], ps_num[8], ps_num[9], ps_num[10], ps_num[11], ps_num[12], ps_num[13], ps_num[14], ps_num[15]);
-		// DEBUG("%d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d\r\n", ps_num_2[0], ps_num_2[1], ps_num_2[2], ps_num_2[3], ps_num_2[4], ps_num_2[5], ps_num_2[6], ps_num_2[7], ps_num_2[8], ps_num_2[9], ps_num_2[10], ps_num_2[11], ps_num_2[12], ps_num_2[13], ps_num_2[14], ps_num_2[15]);
-		// DMEnable(&FDCAN_TK, ELBOW, DM_POS_MODE);
-		// DMSetPosZero(&FDCAN_TK, ELBOW, DM_POS_MODE);
-
-		// DMDisable(&FDCAN_TK, WRIST, DM_POS_MODE);
-		// DMDisable(&FDCAN_TK, ELBOW, DM_POS_MODE);
-
-		// static int flag = 0;
-		// if(flag == 0)
-		// {
-		// 	SetDriverZero(&FDCAN_TK,PTP_MODE,SHOULDER);
-		// 	flag = 1;
-		// }
-		// else
-		// {
-		// 	ReadPVT(&FDCAN_TK, PTP_MODE, SHOULDER);
-		// }
-
-		// DEBUG("%f, %f, %f\r\n", shoulderMsg.pos, elbowMsg.pos, wristMsg.pos);
-
-		// static int tim_cnt = 0;
-		// tim_cnt++;
-		// if (tim_cnt <= 11)
-		// {
-		// 	valve_num[10] = 1;	
-		// }
-		// else if (tim_cnt <= 22)
-		// {
-		// 	valve_num[10] = 0;
-		// }
-		// else
-		// {
-		// 	tim_cnt = 0;
-		// }
-		// SendValve();
-
-		// DMDisable(&FDCAN_TK, WRIST, DM_POS_MODE);
-
-		// DEBUG("%f\r\n", wristMsg.pos);
-
-		// __HAL_TIM_SET_COMPARE(&htim8, TIM_CHANNEL_4, 1500);
-
-		// static int tim_cnt = 0;
-		// if (tim_cnt == 0)	
-		// {
-		// 	// DMEnable(&FDCAN_TK, ELBOW, DM_POS_MODE);
-		// 	DMEnable(&FDCAN_TK, WRIST, DM_POS_MODE);
-		// 	tim_cnt = 1;
-		// }
-		// // else if (tim_cnt == 1)
-		// // {
-		// // 	// DMPosCtrl(&FDCAN_TK, ELBOW, 0, 0.5);
-		// // 	DMPosCtrl(&FDCAN_TK, WRIST, 0, 0.5);
-		// // 	if (fabs(elbowMsg.pos) < 0.05 && fabs(wristMsg.pos) < 0.05)
-		// // 	{
-		// // 		tim_cnt = 2;
-		// // 	}
-		// // }
-		// // else
-		// // {
-		// // 	DMDisable(&FDCAN_TK, ELBOW, DM_POS_MODE);
-		// // 	DMDisable(&FDCAN_TK, WRIST, DM_POS_MODE);
-		// // }
-		// else if (tim_cnt <= 10)
-		// {
-		// 	tim_cnt++;
-		// 	// DMSetPosZero(&FDCAN_TK, ELBOW, DM_POS_MODE);
-		// 	DMSetPosZero(&FDCAN_TK, WRIST, DM_POS_MODE);
-		// }
-		// else
-		// {
-		// 	DMDisable(&FDCAN_TK, ELBOW, DM_POS_MODE);
-		// 	DMDisable(&FDCAN_TK, WRIST, DM_POS_MODE);
-		// }
+		/* 机器人控制 */
+		// gRobot.reset_flag = 1;
+		// Start_Info();
+		if (gRobot.start == 1)
+		{
+		    MotorControl();//说是电机，其实舵轮也在里面
+			hsvctrl();
+			ChassisControl();
+		}
 
 		/* 获取驱动器最新消息 */
 		User_Control_GetDriverMsgsSnapshot(&driverMsgs);
-		// SendPCMsg();
+		SendPCMsg();
 
 		cnt++;
 		colorcnt++;
 		cnt %= 200;
 		colorcnt %= 1800;
 	}
+}
+
+
+void hsvctrl()
+{
+	//0：绿色  60：红色  80：黄色  147:浅蓝
+	int h,s,v;
+	h = 0;
+	s = 0;
+	v = 0;
+	//主控——小电脑断通信（黄色)
+	if(HB.PC > 20){
+		h = 80;
+		s = 255;
+		v = 255;
+		wheel1Tar.vel = 0;
+		wheel2Tar.vel = 0;
+		wheel3Tar.vel = 0;
+		wheel4Tar.vel = 0;
+	}
+	//有轮似了，全体亮鲜绿色
+	if(HB.wheel1 > 20 || HB.wheel2 > 20 || HB.wheel3 > 20){
+		h = 60;
+		s = 255;
+		v = 255;
+		//顺手把车停了
+		wheel1Tar.vel = 0;
+		wheel2Tar.vel = 0;
+		wheel3Tar.vel = 0;
+		wheel4Tar.vel = 0;
+	}
+
+	// static uint32_t cnt = 0;
+	// cnt++;
+	// cnt %= 1800;
+
+	wheel1Tar.hsv.h = h;
+	wheel1Tar.hsv.s = s;
+	wheel1Tar.hsv.v = v;
+	wheel2Tar.hsv.h = h;
+	wheel2Tar.hsv.s = s;
+	wheel2Tar.hsv.v = v;
+	wheel3Tar.hsv.h = h;
+	wheel3Tar.hsv.s = s;
+	wheel3Tar.hsv.v = v;
+	wheel4Tar.hsv.h = h;
+	wheel4Tar.hsv.s = s;
+	wheel4Tar.hsv.v = v;
+
 }
 
 /* 函数：以梯形速度曲线生成四腿位置目标；当前主任务未调用此旧实现。 */
@@ -870,12 +688,12 @@ void getHitPosPVT()
     }
 }
 /* 函数：限幅并向四腿下发位置目标；当前主任务调用。 */
-void Leg_PosCtrl(float p1, float p2, float p3, float p4)
+void Leg_PosCtrl(void)
 {
 	static float TAR_LIMIT = 1.05f;
 	bool safe_flag = true;
 	static int LEGS[4] = {LEG1, LEG2, LEG3, LEG4};
-	float LegsPos[4] = {p1, p2, p3, p4};
+	float LegsPos[4] = {leg1Tar.pos, leg2Tar.pos, leg3Tar.pos, leg4Tar.pos};
 
 	static float DLimitPos = 5.0f / 360.f;
 
@@ -905,22 +723,22 @@ void Leg_PosCtrl(float p1, float p2, float p3, float p4)
 
 	if(safe_flag)
 	{
-		PosCtrl(&hfdcan3, PTP_MODE, LEGS[0], (int32_t)(LegsPos[0] * 4096.f), leg1Tar.pos_kp , leg1Tar.pos_kd);
-		PosCtrl(&hfdcan3, PTP_MODE, LEGS[1], (int32_t)(LegsPos[1] * 4096.f), leg2Tar.pos_kp , leg2Tar.pos_kd);
-		PosCtrl(&hfdcan3, PTP_MODE, LEGS[2], (int32_t)(LegsPos[2] * 4096.f), leg3Tar.pos_kp , leg3Tar.pos_kd);
-		PosCtrl(&hfdcan3, PTP_MODE, LEGS[3], (int32_t)(LegsPos[3] * 4096.f), leg4Tar.pos_kp , leg4Tar.pos_kd);
+		PosCtrl(&hfdcan1, PTP_MODE, LEGS[0], LegsPos[0], leg1Tar.pos_kp , leg1Tar.pos_kd);
+		PosCtrl(&hfdcan1, PTP_MODE, LEGS[1], LegsPos[1], leg2Tar.pos_kp , leg2Tar.pos_kd);
+		PosCtrl(&hfdcan1, PTP_MODE, LEGS[2], LegsPos[2], leg3Tar.pos_kp , leg3Tar.pos_kd);
+		PosCtrl(&hfdcan1, PTP_MODE, LEGS[3], LegsPos[3], leg4Tar.pos_kp , leg4Tar.pos_kd);
 	}
 }
 /*注意限幅*/
 /* 函数：限幅四腿位置与速度并下发 PVT 控制；当前声明供上层动作流程使用。 */
-void LegPVTCtrl(float p1, float p2, float p3, float p4)
+void LegPVTCtrl(void)
 {
 	const float TAR_LIMIT = 1.05f;
 	const float VEL_LIMIT = 1.05f;
 	const float RAD_PER_REV = 2.0f * PI;
 	bool safe_flag = true;
 	static const uint8_t LEGS[4] = {LEG1, LEG2, LEG3, LEG4};
-	float LegsPos[4] = {p1, p2, p3, p4};
+	float LegsPos[4] = {leg1Tar.pos, leg2Tar.pos, leg3Tar.pos, leg4Tar.pos};
 	float LegsVel[4] = {leg1Tar.vel, leg2Tar.vel, leg3Tar.vel, leg4Tar.vel};
 
 	for(int i = 0; i < 4; i++)
@@ -958,9 +776,9 @@ void LegPVTCtrl(float p1, float p2, float p3, float p4)
 
 	if(safe_flag)
 	{
-		PVTCtrl(&hfdcan3, LEGS[0], LegsPos[0] * RAD_PER_REV, LegsVel[0] * RAD_PER_REV, leg1Tar.mit_kp, leg1Tar.mit_kd, leg1Tar.tor);
-		PVTCtrl(&hfdcan3, LEGS[1], LegsPos[1] * RAD_PER_REV, LegsVel[1] * RAD_PER_REV, leg2Tar.mit_kp, leg2Tar.mit_kd, leg2Tar.tor);
-		PVTCtrl(&hfdcan3, LEGS[2], LegsPos[2] * RAD_PER_REV, LegsVel[2] * RAD_PER_REV, leg3Tar.mit_kp, leg3Tar.mit_kd, leg3Tar.tor);
-		PVTCtrl(&hfdcan3, LEGS[3], LegsPos[3] * RAD_PER_REV, LegsVel[3] * RAD_PER_REV, leg4Tar.mit_kp, leg4Tar.mit_kd, leg4Tar.tor);
+		PVTCtrl(&hfdcan1, LEGS[0], LegsPos[0] * RAD_PER_REV, LegsVel[0] * RAD_PER_REV, leg1Tar.mit_kp, leg1Tar.mit_kd, leg1Tar.tor);
+		PVTCtrl(&hfdcan1, LEGS[1], LegsPos[1] * RAD_PER_REV, LegsVel[1] * RAD_PER_REV, leg2Tar.mit_kp, leg2Tar.mit_kd, leg2Tar.tor);
+		PVTCtrl(&hfdcan1, LEGS[2], LegsPos[2] * RAD_PER_REV, LegsVel[2] * RAD_PER_REV, leg3Tar.mit_kp, leg3Tar.mit_kd, leg3Tar.tor);
+		PVTCtrl(&hfdcan1, LEGS[3], LegsPos[3] * RAD_PER_REV, LegsVel[3] * RAD_PER_REV, leg4Tar.mit_kp, leg4Tar.mit_kd, leg4Tar.tor);
 	}
 }

@@ -231,7 +231,7 @@ HAL_StatusTypeDef SetVelKpKi(FDCAN_HandleTypeDef *hfdcan, CommandMode CMDmode, u
 /* 函数声明：下发速度、电流前馈及积分清除控制量；返回 HAL 发送状态。 */
 HAL_StatusTypeDef VelCtrl(FDCAN_HandleTypeDef *hfdcan, CommandMode CMDmode, uint8_t DriverNum, int32_t vel, float curr, bool clean);
 /* 函数声明：下发位置目标及位置环 KP/KD；返回 HAL 发送状态。 */
-HAL_StatusTypeDef PosCtrl(FDCAN_HandleTypeDef *hfdcan, CommandMode CMDmode, uint8_t DriverNum, int32_t pos, float kp, float kd);
+HAL_StatusTypeDef PosCtrl(FDCAN_HandleTypeDef *hfdcan, CommandMode CMDmode, uint8_t DriverNum, float pos, float kp, float kd);
 /* 函数声明：设置速度、扭矩和电流限制；返回 HAL 发送状态。 */
 HAL_StatusTypeDef SetLimits(FDCAN_HandleTypeDef *hfdcan, CommandMode CMDmode, uint8_t DriverNum, int32_t VelLimit, int32_t TrqLimit, float CurLimit);
 /* 函数声明：设置速度加速和减速限制；返回 HAL 发送状态。 */

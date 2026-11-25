@@ -1,6 +1,9 @@
 #include "user_communication.h"
 #include "user_control.h"
 #include "user_usart.h"
+#include "chassis_driver.h"
+#include "motor_driver.h"
+#include "user_task.h"
 
 #include "usbd_cdc_if.h"
 #include "usbd_def.h"
@@ -333,38 +336,38 @@ int UsbTx_SendString(const char *str, uint32_t timeout_ms)
 }
 
 /* 函数：按格式组织并通过 USB 调试通道发送文本；受 CDC 就绪状态限制，工程内未发现有效调用点。 */
-int DEBUG_USB(const char *fmt, ...)
-{
-	/* printf 风格调试输出：格式化到栈上缓冲并异步投递（默认不阻塞） */
-	if (fmt == NULL)
-	{
-		return -1;
-	}
-	if (!UsbCdc_IsConfigured())
-	{
-		return -3;
-	}
+// int DEBUG_USB(const char *fmt, ...)
+// {
+// 	/* printf 风格调试输出：格式化到栈上缓冲并异步投递（默认不阻塞） */
+// 	if (fmt == NULL)
+// 	{
+// 		return -1;
+// 	}
+// 	if (!UsbCdc_IsConfigured())
+// 	{
+// 		return -3;
+// 	}
 
-	char out[256];
-	va_list args;
-	va_start(args, fmt);
-	int n = vsnprintf(out, sizeof(out), fmt, args);
-	va_end(args);
+// 	char out[256];
+// 	va_list args;
+// 	va_start(args, fmt);
+// 	int n = vsnprintf(out, sizeof(out), fmt, args);
+// 	va_end(args);
 
-	if (n < 0)
-	{
-		return -1;
-	}
+// 	if (n < 0)
+// 	{
+// 		return -1;
+// 	}
 
-	if ((size_t)n >= sizeof(out))
-	{
-		/* 截断发送（vsnprintf 已确保以 '\0' 结尾） */
-		n = (int)sizeof(out) - 1;
-	}
+// 	if ((size_t)n >= sizeof(out))
+// 	{
+// 		/* 截断发送（vsnprintf 已确保以 '\0' 结尾） */
+// 		n = (int)sizeof(out) - 1;
+// 	}
 
-	/* 0ms：不阻塞，避免影响实时任务；满了就丢 */
-	return UsbTx_Send((const uint8_t *)out, (uint16_t)n, 0U);
-}
+// 	/* 0ms：不阻塞，避免影响实时任务；满了就丢 */
+// 	return UsbTx_Send((const uint8_t *)out, (uint16_t)n, 0U);
+// }
 /**
  * @brief  注册接收回调
  */
@@ -457,317 +460,320 @@ void UsbRx_GetStats(uint32_t *rx_enqueued_bytes, uint32_t *rx_dropped_bytes)
 /**
  * @brief  处理来自 PC 的消息（UsbRxTask 回调触发）
  */
-// void GetPCMsg(const uint8_t *data, uint16_t len)
-// {
-// 	if ((data == NULL) || (len == 0U))
-// 	{
-// 		return;
-// 	}
+void GetPCMsg(const uint8_t *data, uint16_t len)
+{
+	if ((data == NULL) || (len == 0U))
+	{
+		return;
+	}
 
-// 	/*
-// 	 * CDC OUT 可能把一帧拆成多次回调，也可能多帧粘连；
-// 	 * 这里用一个滑动缓存拼接字节流，并保持“只解析最新完整帧”的行为。
-// 	 */
-// 	static uint8_t s_rx_cache[MAX_GET_LEN];
-// 	static uint16_t s_rx_cache_len = 0U;
+	/*
+	 * CDC OUT 可能把一帧拆成多次回调，也可能多帧粘连；
+	 * 这里用一个滑动缓存拼接字节流，并保持“只解析最新完整帧”的行为。
+	 */
+	static uint8_t s_rx_cache[MAX_GET_LEN];
+	static uint16_t s_rx_cache_len = 0U;
 
-// 	/* 追加到缓存：超出则丢弃最旧数据 */
-// 	uint16_t copy_len = len;
-// 	if (copy_len > (uint16_t)sizeof(s_rx_cache))
-// 	{
-// 		/* 过长：只保留最后 MAX_GET_LEN 字节 */
-// 		data += (uint16_t)(copy_len - (uint16_t)sizeof(s_rx_cache));
-// 		copy_len = (uint16_t)sizeof(s_rx_cache);
-// 		s_rx_cache_len = 0U;
-// 	}
+	/* 追加到缓存：超出则丢弃最旧数据 */
+	uint16_t copy_len = len;
+	if (copy_len > (uint16_t)sizeof(s_rx_cache))
+	{
+		/* 过长：只保留最后 MAX_GET_LEN 字节 */
+		data += (uint16_t)(copy_len - (uint16_t)sizeof(s_rx_cache));
+		copy_len = (uint16_t)sizeof(s_rx_cache);
+		s_rx_cache_len = 0U;
+	}
 
-// 	if ((uint32_t)s_rx_cache_len + (uint32_t)copy_len > (uint32_t)sizeof(s_rx_cache))
-// 	{
-// 		const uint16_t overflow = (uint16_t)(((uint32_t)s_rx_cache_len + (uint32_t)copy_len) - (uint32_t)sizeof(s_rx_cache));
-// 		if (overflow >= s_rx_cache_len)
-// 		{
-// 			s_rx_cache_len = 0U;
-// 		}
-// 		else
-// 		{
-// 			memmove(&s_rx_cache[0], &s_rx_cache[overflow], (size_t)(s_rx_cache_len - overflow));
-// 			s_rx_cache_len = (uint16_t)(s_rx_cache_len - overflow);
-// 		}
-// 	}
+	if ((uint32_t)s_rx_cache_len + (uint32_t)copy_len > (uint32_t)sizeof(s_rx_cache))
+	{
+		const uint16_t overflow = (uint16_t)(((uint32_t)s_rx_cache_len + (uint32_t)copy_len) - (uint32_t)sizeof(s_rx_cache));
+		if (overflow >= s_rx_cache_len)
+		{
+			s_rx_cache_len = 0U;
+		}
+		else
+		{
+			memmove(&s_rx_cache[0], &s_rx_cache[overflow], (size_t)(s_rx_cache_len - overflow));
+			s_rx_cache_len = (uint16_t)(s_rx_cache_len - overflow);
+		}
+	}
 
-// 	memcpy(&s_rx_cache[s_rx_cache_len], data, (size_t)copy_len);
-// 	s_rx_cache_len = (uint16_t)(s_rx_cache_len + copy_len);
+	memcpy(&s_rx_cache[s_rx_cache_len], data, (size_t)copy_len);
+	s_rx_cache_len = (uint16_t)(s_rx_cache_len + copy_len);
 
-// 	if (s_rx_cache_len < (uint16_t)USB_RX_LEN)
-// 	{
-// 		return;
-// 	}
+	if (s_rx_cache_len < (uint16_t)USB_RX_LEN)
+	{
+		return;
+	}
 
-// 	uint8_t pcdata[USB_RX_LEN] = {};
-// 	bool found = false;
-// 	int found_end = -1;
+	uint8_t pcdata[USB_RX_LEN] = {};
+	bool found = false;
+	int found_end = -1;
 
-// 	/* 只解析最新帧：从末尾往前找最后一个完整帧（固定长度 USB_RX_LEN） */
-// 	for (int end = (int)s_rx_cache_len - 1; end >= ((int)USB_RX_LEN - 1); end--)
-// 	{
-// 		const int start = end - ((int)USB_RX_LEN - 1);
-// 		if ((s_rx_cache[start] == (uint8_t)frame_header_read1) && (s_rx_cache[start + 1] == (uint8_t)frame_header_read2) &&
-// 			(s_rx_cache[end - 1] == (uint8_t)frame_tail_read1) && (s_rx_cache[end] == (uint8_t)frame_tail_read2))
-// 		{
-// 			memcpy(pcdata, &s_rx_cache[start], (size_t)USB_RX_LEN);
-// 			found = true;
-// 			found_end = end;
-// 			break;
-// 		}
-// 	}
+	/* 只解析最新帧：从末尾往前找最后一个完整帧（固定长度 USB_RX_LEN） */
+	for (int end = (int)s_rx_cache_len - 1; end >= ((int)USB_RX_LEN - 1); end--)
+	{
+		const int start = end - ((int)USB_RX_LEN - 1);
+		if ((s_rx_cache[start] == (uint8_t)frame_header_read1) && (s_rx_cache[start + 1] == (uint8_t)frame_header_read2) &&
+			(s_rx_cache[end - 1] == (uint8_t)frame_tail_read1) && (s_rx_cache[end] == (uint8_t)frame_tail_read2))
+		{
+			memcpy(pcdata, &s_rx_cache[start], (size_t)USB_RX_LEN);
+			found = true;
+			found_end = end;
+			break;
+		}
+	}
 
-// 	if (!found)
-// 	{
-// 		return;
-// 	}
+	if (!found)
+	{
+		return;
+	}
 
-// 	/* 丢弃到 found_end（含）之前的数据，避免重复处理同一帧 */
-// 	{
-// 		const uint16_t consume = (uint16_t)(found_end + 1);
-// 		if (consume >= s_rx_cache_len)
-// 		{
-// 			s_rx_cache_len = 0U;
-// 		}
-// 		else
-// 		{
-// 			memmove(&s_rx_cache[0], &s_rx_cache[consume], (size_t)(s_rx_cache_len - consume));
-// 			s_rx_cache_len = (uint16_t)(s_rx_cache_len - consume);
-// 		}
-// 	}
+	/* 丢弃到 found_end（含）之前的数据，避免重复处理同一帧 */
+	{
+		const uint16_t consume = (uint16_t)(found_end + 1);
+		if (consume >= s_rx_cache_len)
+		{
+			s_rx_cache_len = 0U;
+		}
+		else
+		{
+			memmove(&s_rx_cache[0], &s_rx_cache[consume], (size_t)(s_rx_cache_len - consume));
+			s_rx_cache_len = (uint16_t)(s_rx_cache_len - consume);
+		}
+	}
 
-// 	// TODO 在这里处理 pcdata
-// 	(void)pcdata;
+	// TODO 在这里处理 pcdata
+	(void)pcdata;
 
-// 	/* 帧格式：2 字节帧头 + USB_RX_UINT8_NUM 字节控制 + payload + 2 字节帧尾 */
-// 	const uint32_t ctrlBase = 2U;
-// 	HB.PC = 0;//心跳包归零表示收到
+	/* 帧格式：2 字节帧头 + USB_RX_UINT8_NUM 字节控制 + payload + 2 字节帧尾 */
+	const uint32_t ctrlBase = 2U;
+	HB.PC = 0;//心跳包归零表示收到
 
-// 	gRobot.runSucceedFlag = (pcdata[ctrlBase] >> 0) & 0x01;
+	gRobot.runSucceedFlag = (pcdata[ctrlBase] >> 0) & 0x01;
 	
-// 	leg1Tar.mode = (pcdata[ctrlBase + 1] >> 0) & 0x03;
-// 	leg2Tar.mode = (pcdata[ctrlBase + 1] >> 2) & 0x03;
-// 	leg3Tar.mode = (pcdata[ctrlBase + 1] >> 4) & 0x03;
-// 	leg4Tar.mode = (pcdata[ctrlBase + 1] >> 6) & 0x03;
+	// leg1Tar.mode = (pcdata[ctrlBase + 1] >> 0) & 0x03;
+	// leg2Tar.mode = (pcdata[ctrlBase + 1] >> 2) & 0x03;
+	// leg3Tar.mode = (pcdata[ctrlBase + 1] >> 4) & 0x03;
+	// leg4Tar.mode = (pcdata[ctrlBase + 1] >> 6) & 0x03;
 
-// 	wheel1Tar.mode = (pcdata[ctrlBase + 2] >> 0) & 0x03;
-// 	wheel2Tar.mode = (pcdata[ctrlBase + 2] >> 2) & 0x03;
-// 	wheel3Tar.mode = (pcdata[ctrlBase + 2] >> 4) & 0x03;
-// 	wheel4Tar.mode = (pcdata[ctrlBase + 2] >> 6) & 0x03;
+	// wheel1Tar.mode = (pcdata[ctrlBase + 2] >> 0) & 0x03;
+	// wheel2Tar.mode = (pcdata[ctrlBase + 2] >> 2) & 0x03;
+	// wheel3Tar.mode = (pcdata[ctrlBase + 2] >> 4) & 0x03;
+	// wheel4Tar.mode = (pcdata[ctrlBase + 2] >> 6) & 0x03;
 	
-// 	valve_num[4]  = (pcdata[ctrlBase + 3] >> 0) & 0x01;// 倒
-// 	valve_num[7]  = (pcdata[ctrlBase + 3] >> 1) & 0x01;// 伸缩
-// 	valve_num[9] = (pcdata[ctrlBase + 3] >> 2) & 0x01;// 夹
-// 	valve_num[8]  = (pcdata[ctrlBase + 3] >> 3) & 0x01;// 压块
-// 	valve_num[14]  = (pcdata[ctrlBase + 3] >> 4) & 0x01;// 缓冲
-// 	valve_num[10] = (pcdata[ctrlBase + 3] >> 5) & 0x01;//
-// 	valve_num[3] = (pcdata[ctrlBase + 3] >> 6) & 0x01;// 从动
-// 	valve_num[11] = (pcdata[ctrlBase + 3] >> 7) & 0x01;// 夹爪
+	// valve_num[4]  = (pcdata[ctrlBase + 3] >> 0) & 0x01;// 倒
+	// valve_num[7]  = (pcdata[ctrlBase + 3] >> 1) & 0x01;// 伸缩
+	// valve_num[9] = (pcdata[ctrlBase + 3] >> 2) & 0x01;// 夹
+	// valve_num[8]  = (pcdata[ctrlBase + 3] >> 3) & 0x01;// 压块
+	// valve_num[14]  = (pcdata[ctrlBase + 3] >> 4) & 0x01;// 缓冲
+	// valve_num[10] = (pcdata[ctrlBase + 3] >> 5) & 0x01;//
+	// valve_num[3] = (pcdata[ctrlBase + 3] >> 6) & 0x01;// 从动
+	// valve_num[11] = (pcdata[ctrlBase + 3] >> 7) & 0x01;// 夹爪
 	
-// 	shoulderTar.mode       = (pcdata[ctrlBase + 4] >> 0) & 0x03;
-// 	elbowTar.mode = (pcdata[ctrlBase + 4] >> 2) & 0x03;
-// 	wristTar.mode      = (pcdata[ctrlBase + 4] >> 4) & 0x03;
+	// shoulderTar.mode       = (pcdata[ctrlBase + 4] >> 0) & 0x03;
+	// elbowTar.mode = (pcdata[ctrlBase + 4] >> 2) & 0x03;
+	// wristTar.mode      = (pcdata[ctrlBase + 4] >> 4) & 0x03;
 
-// 	valve_num[0] = (pcdata[ctrlBase + 5] >> 0) & 0x01;//红外1
-// 	valve_num[5] = (pcdata[ctrlBase + 5] >> 1) & 0x01;//红外2
-// 	//联合体接收
-// 	for(uint16_t i = USB_RX_UINT8_NUM + ctrlBase; i < USB_RX_LEN - 2; i++)
-// 	{
-// 		RX_Data.datac[i - (USB_RX_UINT8_NUM + ctrlBase)] = pcdata[i];
-// 	}
+	// valve_num[0] = (pcdata[ctrlBase + 5] >> 0) & 0x01;//红外1
+	// valve_num[5] = (pcdata[ctrlBase + 5] >> 1) & 0x01;//红外2
+	//联合体接收
+	for(uint16_t i = USB_RX_UINT8_NUM + ctrlBase; i < USB_RX_LEN - 2; i++)
+	{
+		RX_Data.datac[i - (USB_RX_UINT8_NUM + ctrlBase)] = pcdata[i];
+	}
 	
-// 	gRobot.periodCntPC = RX_Data.dataint32[0];//PC运行时间
-// 	leg1Tar.pos = RX_Data.dataf[1];
-// 	leg1Tar.vel = RX_Data.dataf[2];
-// 	leg1Tar.tor = RX_Data.dataf[3];
-// 	leg1Tar.pos_kp = RX_Data.dataf[4] * 60.0;
-// 	leg1Tar.pos_kd = RX_Data.dataf[5] * 0.1;
-// 	leg1Tar.vel_kp = RX_Data.dataf[6];
-// 	leg1Tar.vel_ki = RX_Data.dataf[7];
+	gRobot.periodCntPC = RX_Data.dataint32[0];//PC运行时间
+	leg1Tar.pos = RX_Data.dataf[1];
+	leg1Tar.vel = RX_Data.dataf[2];
+	leg1Tar.tor = RX_Data.dataf[3];
+	leg1Tar.pos_kp = RX_Data.dataf[4];
+	leg1Tar.pos_kd = RX_Data.dataf[5];
+	leg1Tar.vel_kp = RX_Data.dataf[6];
+	leg1Tar.vel_ki = RX_Data.dataf[7];
 
-// 	leg2Tar.pos = RX_Data.dataf[8];
-// 	leg2Tar.vel = RX_Data.dataf[9];
-// 	leg2Tar.tor = RX_Data.dataf[10];
-// 	leg2Tar.pos_kp = RX_Data.dataf[11] * 60.0;
-// 	leg2Tar.pos_kd = RX_Data.dataf[12] * 0.1;
-// 	leg2Tar.vel_kp = RX_Data.dataf[13];
-// 	leg2Tar.vel_ki = RX_Data.dataf[14];
+	leg2Tar.pos = RX_Data.dataf[8];
+	leg2Tar.vel = RX_Data.dataf[9];
+	leg2Tar.tor = RX_Data.dataf[10];
+	leg2Tar.pos_kp = RX_Data.dataf[11];
+	leg2Tar.pos_kd = RX_Data.dataf[12];
+	leg2Tar.vel_kp = RX_Data.dataf[13];
+	leg2Tar.vel_ki = RX_Data.dataf[14];
 
-// 	leg3Tar.pos = RX_Data.dataf[15];
-// 	leg3Tar.vel = RX_Data.dataf[16];
-// 	leg3Tar.tor = RX_Data.dataf[17];
-// 	leg3Tar.pos_kp = RX_Data.dataf[18] * 60.0;
-// 	leg3Tar.pos_kd = RX_Data.dataf[19] * 0.1;
-// 	leg3Tar.vel_kp = RX_Data.dataf[20];
-// 	leg3Tar.vel_ki = RX_Data.dataf[21];
+	leg3Tar.pos = RX_Data.dataf[15];
+	leg3Tar.vel = RX_Data.dataf[16];
+	leg3Tar.tor = RX_Data.dataf[17];
+	leg3Tar.pos_kp = RX_Data.dataf[18];
+	leg3Tar.pos_kd = RX_Data.dataf[19];
+	leg3Tar.vel_kp = RX_Data.dataf[20];
+	leg3Tar.vel_ki = RX_Data.dataf[21];
 
-// 	leg4Tar.pos = RX_Data.dataf[22];
-// 	leg4Tar.vel = RX_Data.dataf[23];
-// 	leg4Tar.tor = RX_Data.dataf[24];
-// 	leg4Tar.pos_kp = RX_Data.dataf[25] * 60.0;
-// 	leg4Tar.pos_kd = RX_Data.dataf[26] * 0.1;
-// 	leg4Tar.vel_kp = RX_Data.dataf[27];
-// 	leg4Tar.vel_ki = RX_Data.dataf[28];
+	leg4Tar.pos = RX_Data.dataf[22];
+	leg4Tar.vel = RX_Data.dataf[23];
+	leg4Tar.tor = RX_Data.dataf[24];
+	leg4Tar.pos_kp = RX_Data.dataf[25];
+	leg4Tar.pos_kd = RX_Data.dataf[26];
+	leg4Tar.vel_kp = RX_Data.dataf[27];
+	leg4Tar.vel_ki = RX_Data.dataf[28];
 
-// 	shoulderTar.pos = RX_Data.dataf[29];
-// 	shoulderTar.vel = RX_Data.dataf[30];
-// 	shoulderTar.tor = RX_Data.dataf[31];
-// 	shoulderTar.pos_kp = RX_Data.dataf[32] * 60.0;
-// 	shoulderTar.pos_kd = RX_Data.dataf[33] * 0.1;
-// 	shoulderTar.vel_kp = RX_Data.dataf[34];
-// 	shoulderTar.vel_ki = RX_Data.dataf[35];
 	
-// 	elbowTar.pos = RX_Data.dataf[36] * 2.0 * PI;
-// 	elbowTar.vel = RX_Data.dataf[37] * 2.0 * PI;
+	plateTar.vel = RX_Data.dataf[29];
+	plateTar.tor = RX_Data.dataf[30];
+	plateTar.vel_kp = RX_Data.dataf[31];
+	plateTar.vel_ki = RX_Data.dataf[32];
 	
-// 	wristTar.pos = RX_Data.dataf[38] * 2.0 * PI;
-// 	wristTar.vel = RX_Data.dataf[39] * 2.0 * PI;
+	arm1Tar.pos = RX_Data.dataf[33];
+	arm1Tar.pos_kp = RX_Data.dataf[34];
+	arm1Tar.pos_kd = RX_Data.dataf[35];
+	arm1Tar.vel_kp = RX_Data.dataf[36];
+	arm1Tar.vel_ki = RX_Data.dataf[37];
 
-// 	wheel1Tar.pos = RX_Data.dataf[40];
-// 	wheel1Tar.vel = RX_Data.dataf[41];
-// 	wheel1Tar.tor = RX_Data.dataf[42];
-// 	wheel1Tar.pos_kp = RX_Data.dataf[43];
-// 	wheel1Tar.pos_kd = RX_Data.dataf[44];
-// 	wheel1Tar.vel_kp = RX_Data.dataf[45];
-// 	wheel1Tar.vel_ki = RX_Data.dataf[46];
-
-// 	wheel2Tar.pos = RX_Data.dataf[47];
-// 	wheel2Tar.vel = RX_Data.dataf[48];
-// 	wheel2Tar.tor = RX_Data.dataf[49];
-// 	wheel2Tar.pos_kp = RX_Data.dataf[50];
-// 	wheel2Tar.pos_kd = RX_Data.dataf[51];
-// 	wheel2Tar.vel_kp = RX_Data.dataf[52];
-// 	wheel2Tar.vel_ki = RX_Data.dataf[53];
-
-// 	wheel3Tar.pos = RX_Data.dataf[54];
-// 	wheel3Tar.vel = RX_Data.dataf[55];
-// 	wheel3Tar.tor = RX_Data.dataf[56];
-// 	wheel3Tar.pos_kp = RX_Data.dataf[57];
-// 	wheel3Tar.pos_kd = RX_Data.dataf[58];
-// 	wheel3Tar.vel_kp = RX_Data.dataf[59];
-// 	wheel3Tar.vel_ki = RX_Data.dataf[60];
-
-// 	wheel4Tar.pos = RX_Data.dataf[61];
-// 	wheel4Tar.vel = RX_Data.dataf[62];
-// 	wheel4Tar.tor = RX_Data.dataf[63];
-// 	wheel4Tar.pos_kp = RX_Data.dataf[64];
-// 	wheel4Tar.pos_kd = RX_Data.dataf[65];
-// 	wheel4Tar.vel_kp = RX_Data.dataf[66];
-// 	wheel4Tar.vel_ki = RX_Data.dataf[67];
-
-// 	wheel1Tar.clean = RX_Data.dataf[68];
-// 	wheel2Tar.clean = RX_Data.dataf[69];
-// 	wheel3Tar.clean = RX_Data.dataf[70];
-// 	wheel4Tar.clean = RX_Data.dataf[71];
+	arm2Tar.pos = RX_Data.dataf[38];
+	arm2Tar.pos_kp = RX_Data.dataf[39];
+	arm2Tar.pos_kd = RX_Data.dataf[40];
+	arm2Tar.vel_kp = RX_Data.dataf[41];
+	arm2Tar.vel_ki = RX_Data.dataf[42];
 	
-// 	memset(pcdata, 0, sizeof(pcdata));
-// }
+	slideTar.pos = RX_Data.dataf[43];
+
+
+	wheel1Tar.pos = RX_Data.dataf[44];
+	wheel1Tar.vel = RX_Data.dataf[45];
+	wheel2Tar.pos = RX_Data.dataf[46];
+	wheel2Tar.vel = RX_Data.dataf[47];
+	wheel3Tar.pos = RX_Data.dataf[48];
+	wheel3Tar.vel = RX_Data.dataf[49];
+	wheel4Tar.pos = RX_Data.dataf[50];
+	wheel4Tar.vel = RX_Data.dataf[51];
+
+	leg1Tar.mit_kd = RX_Data.dataf[52];
+	leg1Tar.mit_kp = RX_Data.dataf[53];
+	leg2Tar.mit_kd = RX_Data.dataf[54];
+	leg2Tar.mit_kp = RX_Data.dataf[55];
+	leg3Tar.mit_kd = RX_Data.dataf[56];
+	leg3Tar.mit_kp = RX_Data.dataf[57];
+	leg4Tar.mit_kd = RX_Data.dataf[58];
+	leg4Tar.mit_kp = RX_Data.dataf[59];
+
+
+//原本是71
+
+	gRobot.mode = RX_Data.dataint[60];
+	gRobot.start = RX_Data.dataint[61];
+
+	memset(pcdata, 0, sizeof(pcdata));
+}
 
 /**
  * @brief 发送消息到 PC
  */
-// void SendPCMsg(void)
-// {
-// 	uint8_t data[USB_TX_LEN] = {};
-// 	data[0] = frame_header_write1;//帧头2位
-// 	data[1] = frame_header_write2;
-// 	data[USB_TX_LEN-2] = frame_tail_write1;//帧尾2位
-// 	data[USB_TX_LEN-1] = frame_tail_write2;
+void SendPCMsg(void)
+{
+	uint8_t data[USB_TX_LEN] = {};
+	data[0] = frame_header_write1;//帧头2位
+	data[1] = frame_header_write2;
+	data[USB_TX_LEN-2] = frame_tail_write1;//帧尾2位
+	data[USB_TX_LEN-1] = frame_tail_write2;
 	
-// 	//心跳包
-// 	data[2] = HB.PC;
-// 	data[3] = HB.leg1;
-// 	data[4] = HB.leg2;
-// 	data[5] = HB.leg3;
-// 	data[6] = HB.leg4;
-// 	data[7] = HB.wheel1;
-// 	data[8] = HB.wheel2;
-// 	data[9] = HB.wheel3;
-// 	data[10]= HB.wheel4;
-// 	data[11]= HB.shoulder;
-// 	data[12]= HB.elbow;
-// 	data[13]= HB.wrist;
-// 	data[14] = (ps_num[7] & 0x01) << 0 | (ps_num[11] & 0x01) << 1 |
-// 							(ps_num[9] & 0x01) << 2 | (ps_num[3] & 0x01) << 3 |
-// 							(ps_num[4] & 0x01) << 4 | (ps_num[8] & 0x01) << 5 |
-// 							(ps_num[12] & 0x01) << 6 | (ps_num[13] & 0x01) << 7;
-// 	data[15] = (ps_num[2] & 0x01) << 0 | (ps_num[1] & 0x01) << 1 | //  行程开关车尾
-// 							(ps_num[0] & 0x01) << 2 | (ps_num[14] & 0x01) << 3 |//  左侧 右侧
-// 							(ps_num[10] & 0x01) << 4 | (ps_num[5] & 0x01) << 5 |// 行程开关车头（右左）
-// 							(ps_num[6] & 0x01) << 6;// 爪子
-// 	data[16] = (ps_num_2[5] & 0x01) << 0 | (ps_num_2[13] & 0x01) << 1 | // 看R1(右左)
-// 							(ps_num_2[0] & 0x01) << 2 | (ps_num_2[4] & 0x01) << 3; //侧边行程开关（前后）
-// 	data[17] = gRobot.reset_flag;
+	//心跳包
+	data[2] = HB.PC;
+	data[3] = HB.leg1;
+	data[4] = HB.leg2;
+	data[5] = HB.leg3;
+	data[6] = HB.leg4;
+	data[7] = HB.wheel1;
+	data[8] = HB.wheel2;
+	data[9] = HB.wheel3;
+	data[10]= HB.wheel4;
+	data[11]= HB.plate;
+	data[12]= HB.slide;
+	data[13]= HB.arm1;
+	data[14]= HB.arm2;
+	data[15] = (ps_num[0] & 0x01) << 0 | (ps_num[1] & 0x01) << 1 |
+							(ps_num[2] & 0x01) << 2 | (ps_num[3] & 0x01) << 3 |
+							(ps_num[4] & 0x01) << 4 | (ps_num[5] & 0x01) << 5 ;
+	data[16] = gRobot.reset_flag;
 
-// 	data[18] = leg1Msg.error;
-// 	data[19] = leg2Msg.error;
-// 	data[20] = leg3Msg.error;
-// 	data[21] = leg4Msg.error;
-// 	data[22] = wheel1Msg.error;
-// 	data[23] = wheel2Msg.error;
-// 	data[24] = wheel3Msg.error;
-// 	data[25] = wheel4Msg.error;
-// 	data[26] = shoulderMsg.error;
+	data[17] = leg1Msg.error;
+	data[18] = leg2Msg.error;
+	data[19] = leg3Msg.error;
+	data[20] = leg4Msg.error;
 
-// 	data[27] = leg1Msg.enableState;
-// 	data[28] = leg2Msg.enableState;
-// 	data[29] = leg3Msg.enableState;
-// 	data[30] = leg4Msg.enableState;
+	data[25] = plateMsg.error;
+	data[26] = slideMsg.error;
+	data[27] = arm1Msg.error;
+	data[28] = arm2Msg.error;
+	data[29] = wheel1Msg.status;
+	data[30] = wheel2Msg.status;
+	data[31] = wheel3Msg.status;
+	data[32] = wheel4Msg.status;
 
-// 	TX_Data.data_float[1] = leg1Msg.pos;
-// 	TX_Data.data_float[2] = leg1Msg.vel;
-// 	TX_Data.data_float[3] = leg1Msg.currQ;
+	data[33] = legok;//设想用来判断第一阶段是否完成
+	data[34] = wheelok;
+	data[35] = plateok;
+	data[36] = serveok;
+	data[37] = armok;
 
-// 	TX_Data.data_float[4] = leg2Msg.pos;
-// 	TX_Data.data_float[5] = leg2Msg.vel;
-// 	TX_Data.data_float[6] = leg2Msg.currQ;
+	TX_Data.data_float[1] = leg1Msg.pos;
+	TX_Data.data_float[2] = leg1Msg.vel;
+	TX_Data.data_float[3] = leg1Msg.currQ;
 
-// 	TX_Data.data_float[7] = leg3Msg.pos;
-// 	TX_Data.data_float[8] = leg3Msg.vel;
-// 	TX_Data.data_float[9] = leg3Msg.currQ;
+	TX_Data.data_float[4] = leg2Msg.pos;
+	TX_Data.data_float[5] = leg2Msg.vel;
+	TX_Data.data_float[6] = leg2Msg.currQ;
+
+	TX_Data.data_float[7] = leg3Msg.pos;
+	TX_Data.data_float[8] = leg3Msg.vel;
+	TX_Data.data_float[9] = leg3Msg.currQ;
 	
-// 	TX_Data.data_float[10] = leg4Msg.pos;
-// 	TX_Data.data_float[11] = leg4Msg.vel;
-// 	TX_Data.data_float[12] = leg4Msg.currQ;
+	TX_Data.data_float[10] = leg4Msg.pos;
+	TX_Data.data_float[11] = leg4Msg.vel;
+	TX_Data.data_float[12] = leg4Msg.currQ;
 
-// 	TX_Data.data_float[13] = wheel1Msg.pos;
-// 	TX_Data.data_float[14] = wheel1Msg.vel;
-// 	TX_Data.data_float[15] = wheel1Msg.currQ;
+	TX_Data.data_float[13] = wheel1Msg.pos;
+	TX_Data.data_float[14] = wheel1Msg.vel;
+	TX_Data.data_float[15] = wheel1Msg.vel_cur;
+	TX_Data.data_float[16] = wheel1Msg.pos_cur;
 
-// 	TX_Data.data_float[16] = wheel2Msg.pos;
-// 	TX_Data.data_float[17] = wheel2Msg.vel;
-// 	TX_Data.data_float[18] = wheel2Msg.currQ;
+	TX_Data.data_float[17] = wheel2Msg.pos;
+	TX_Data.data_float[18] = wheel2Msg.vel;
+	TX_Data.data_float[19] = wheel2Msg.vel_cur;
+	TX_Data.data_float[20] = wheel2Msg.pos_cur;
 
-// 	TX_Data.data_float[19] = wheel3Msg.pos;
-// 	TX_Data.data_float[20] = wheel3Msg.vel;
-// 	TX_Data.data_float[21] = wheel3Msg.currQ;
+	TX_Data.data_float[21] = wheel3Msg.pos;
+	TX_Data.data_float[22] = wheel3Msg.vel;
+	TX_Data.data_float[23] = wheel3Msg.vel_cur;
+	TX_Data.data_float[24] = wheel3Msg.pos_cur;
 
-// 	TX_Data.data_float[22] = wheel4Msg.pos;
-// 	TX_Data.data_float[23] = wheel4Msg.vel;
-// 	TX_Data.data_float[24] = wheel4Msg.currQ;
+	TX_Data.data_float[25] = wheel4Msg.pos;
+	TX_Data.data_float[26] = wheel4Msg.vel;
+	TX_Data.data_float[27] = wheel4Msg.vel_cur;
+	TX_Data.data_float[28] = wheel4Msg.pos_cur;
 	
-// 	TX_Data.data_float[25] = shoulderMsg.pos;
-// 	TX_Data.data_float[26] = shoulderMsg.vel;
-// 	TX_Data.data_float[27] = shoulderMsg.currQ;
+	TX_Data.data_float[29] = plateMsg.pos;
+	TX_Data.data_float[30] = plateMsg.vel;
+	TX_Data.data_float[31] = plateMsg.currQ;
 	
-// 	TX_Data.data_float[28] = elbowMsg.pos / 2.f / PI;
-// 	TX_Data.data_float[29] = elbowMsg.vel / 2.f / PI;
 	
-// 	TX_Data.data_float[30] = wristMsg.pos / 2.f / PI;
-// 	TX_Data.data_float[31] = wristMsg.vel / 2.f / PI;     
+	TX_Data.data_float[33] = slideMsg.pos;
+	TX_Data.data_float[34] = slideMsg.vel;
 
-// 	//联合体发送
-// 	for(uint16_t i = (uint16_t)(2 + USB_TX_UINT8_NUM); i < (uint16_t)(USB_TX_LEN - 2); i++)
-// 	{
-// 		data[i] = (uint8_t)TX_Data.datac[i - (uint16_t)(2 + USB_TX_UINT8_NUM)];
-// 	}
+	TX_Data.data_float[35] = arm1Msg.pos;
+	TX_Data.data_float[36] = arm1Msg.vel;
+	TX_Data.data_float[37] = arm1Msg.currQ;
 
-// 	UsbTx_Send(data, USB_TX_LEN, 0U);
-// }
+	TX_Data.data_float[38] = arm2Msg.pos;
+	TX_Data.data_float[39] = arm2Msg.vel;
+	TX_Data.data_float[40] = arm2Msg.currQ;
+//31
+	//联合体发送
+	for(uint16_t i = (uint16_t)(2 + USB_TX_UINT8_NUM); i < (uint16_t)(USB_TX_LEN - 2); i++)
+	{
+		data[i] = (uint8_t)TX_Data.datac[i - (uint16_t)(2 + USB_TX_UINT8_NUM)];
+	}
+
+	UsbTx_Send(data, USB_TX_LEN, 0U);
+}
 
 /**
  * @brief  USB 发送任务

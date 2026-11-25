@@ -543,15 +543,16 @@ HAL_StatusTypeDef SetVelKpKi(FDCAN_HandleTypeDef *hfdcan, CommandMode CMDmode, u
 */
 /* 函数：下发普通驱动器位置目标及位置环增益；DriverControl 的位置模式调用。 */
 HAL_StatusTypeDef PosCtrl(FDCAN_HandleTypeDef *hfdcan, CommandMode CMDmode, uint8_t DriverNum,
-        int32_t pos, float kp, float kd)
+        float pos, float kp, float kd)
 {
     uint32_t canId    = DRIVER_SERVER_BASE_ID + CMDmode + DriverNum;
     uint8_t  data[32] = {0};
 
-    Saturation_int(&pos, -1024 * 4096, 1024 * 4096);
+    // Saturation_int(&pos, -1024 * 4096, 1024 * 4096);
+    float pos_send = pos * 4096.f;
 
     data[0] = IDENTIFIER_SET_POS_ABS;
-    memcpy(&data[1], &pos, sizeof(pos));   // data[1..4] = int32 pos
+    memcpy(&data[1], &pos_send, sizeof(pos_send));   // data[1..4] = int32 pos
 
     // kp
     if (kp < 0.0f)
@@ -573,7 +574,7 @@ HAL_StatusTypeDef PosCtrl(FDCAN_HandleTypeDef *hfdcan, CommandMode CMDmode, uint
     else
     {
         data[16] = IDENTIFIER_SET_POS_KD;
-        float kd_send = kd * 1000.0f;
+        float kd_send = kd * 100.0f;//存在矛盾100or1000，要确认换算关系TeST
         memcpy(&data[17], &kd_send, sizeof(kd_send)); // data[17..20] = float
     }
 

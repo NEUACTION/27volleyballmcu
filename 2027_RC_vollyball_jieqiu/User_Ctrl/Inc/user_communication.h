@@ -12,13 +12,13 @@ extern "C" {
 #define MAX_GET_LEN (1024)
 
 /* 宏：USB 接收帧中 uint8_t 项的数量；当前协议解析使用。 */
-#define USB_RX_UINT8_NUM (10)
+#define USB_RX_UINT8_NUM (10)//先留着吧
 /* 宏：USB 接收帧中 32 位数据项数量；当前协议接收布局。 */
-#define USB_RX_DATA_NUM  (77)
+#define USB_RX_DATA_NUM  (54)
 /* 宏：USB 发送帧中 uint8_t 项的数量；当前协议发送布局。 */
-#define USB_TX_UINT8_NUM (29)
+#define USB_TX_UINT8_NUM (37)
 /* 宏：USB 发送帧中 32 位数据项数量；当前协议发送布局。 */
-#define USB_TX_DATA_NUM  (43)
+#define USB_TX_DATA_NUM  (41)//先认为有多少写多少
 
 /* 宏：按接收协议字段数量计算完整接收帧字节长度。 */
 #define USB_RX_LEN (USB_RX_DATA_NUM*4 + USB_RX_UINT8_NUM+4)

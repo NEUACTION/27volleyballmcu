@@ -257,13 +257,10 @@ void SendPs(void)
 {
 	ps_txbuffer[0] = 'I';
 	ps_txbuffer[1] = 'O';
-	ps_txbuffer[14] = '\r';
-	ps_txbuffer[15] = '\n';
+	ps_txbuffer[PS_TX_LEN - 2] = '\r';
+	ps_txbuffer[PS_TX_LEN - 1] = '\n';
 
-	ps_txbuffer_2[0] = 'I';
-	ps_txbuffer_2[1] = 'O';
-	ps_txbuffer_2[14] = '\r';
-	ps_txbuffer_2[15] = '\n';
+
 	
 	HAL_UART_Transmit_IT(&PS_UART, (uint8_t *)ps_txbuffer, PS_TX_LEN);
 	HAL_UART_Transmit_IT(&PS_UART_2, (uint8_t *)ps_txbuffer_2, PS_TX_LEN);

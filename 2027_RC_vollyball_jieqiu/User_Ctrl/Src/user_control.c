@@ -1,5 +1,10 @@
 #include "user_control.h"
 #include "user_usart.h"
+#include "motor_driver.h"
+#include "chassis_driver.h"
+#include "user_task.h"
+
+#include <math.h>
 
 /* 全局变量：设备心跳计数；接收回调清零，周期逻辑递增。 */
 Heart_t HB;
@@ -9,33 +14,41 @@ driverMsg_t leg1Msg, /* 腿部电机 1 反馈；当前接收分支更新。 */
             leg2Msg, /* 腿部电机 2 反馈；当前接收分支更新。 */
             leg3Msg, /* 腿部电机 3 反馈；当前接收分支更新。 */
             leg4Msg, /* 腿部电机 4 反馈；当前接收分支更新。 */
-            wheel1Msg, /* 轮子 1 反馈；当前接收解析分支屏蔽。 */
-            wheel2Msg, /* 轮子 2 反馈；当前接收解析分支屏蔽。 */
-            wheel3Msg, /* 轮子 3 反馈；当前接收解析分支屏蔽。 */
-            wheel4Msg, /* 轮子 4 反馈；当前接收解析分支屏蔽。 */
-            shoulderMsg, /* 肩部反馈；接收解析分支当前屏蔽。 */
-            elbowMsg, /* 肘部反馈；接收解析分支当前屏蔽。 */
-            wristMsg; /* 腕部反馈；接收解析分支当前屏蔽。 */
+            slideMsg, /* 肩部反馈；接收解析分支当前屏蔽。 */
+            plateMsg, /* 肘部反馈；接收解析分支当前屏蔽。 */
+            arm1Msg, /* 腕部反馈；接收解析分支当前屏蔽。 */
+            arm2Msg; /* 腕部反馈；接收解析分支当前屏蔽。 */
 
 /* 全局目标：以下对象由任务填写，电机控制路径读取。 */
-motorTarget_t leg1Tar, /* 腿部电机 1 目标；当前任务控制使用。 */
-              leg2Tar, /* 腿部电机 2 目标；当前任务控制使用。 */
-              leg3Tar, /* 腿部电机 3 目标；当前任务控制使用。 */
-              leg4Tar, /* 腿部电机 4 目标；当前任务控制使用。 */
-              wheel1Tar, /* 轮子 1 目标；当前有效控制路径可能屏蔽。 */
-              wheel2Tar, /* 轮子 2 目标；当前有效控制路径可能屏蔽。 */
-              wheel3Tar, /* 轮子 3 目标；当前有效控制路径可能屏蔽。 */
-              wheel4Tar, /* 轮子 4 目标；当前有效控制路径可能屏蔽。 */
-              shoulderTar, /* 肩部目标；当前任务赋值/发送路径需进一步确认。 */
-              elbowTar, /* 肘部目标；当前任务赋值/发送路径需进一步确认。 */
-              wristTar; /* 腕部目标；当前任务赋值/发送路径需进一步确认。 */
-
+motorTarget_t leg1Tar, /* 腿部电机 1 目标； */
+              leg2Tar, /* 腿部电机 2 目标；*/
+              leg3Tar, /* 腿部电机 3 目标； */
+              leg4Tar, /* 腿部电机 4 目标；*/
+              slideTar, 
+              plateTar, 
+              arm1Tar, 
+              arm2Tar; 
+SteeringWheelTar_t
+              wheel1Tar, /* 轮子 1 目标； */
+              wheel2Tar, /* 轮子 2 目标； */
+              wheel3Tar, /* 轮子 3 目标；。 */
+              wheel4Tar; /* 轮子 4 目标；。 */
+SteeringWheelMsg_t 
+              wheel1Msg, /* 轮子 1 实际； */
+              wheel2Msg, /* 轮子 2 ； */
+              wheel3Msg, /* 轮子 3 ； */
+              wheel4Msg; /* 轮子 4 ；不知道是哪个轮 */             
 /* 全局快照：保存一组驱动反馈及采样时刻；由快照接口写入，调用方读取。 */
 DriverMsgsSnapshot_t driverMsgs;
 
 /* 全局机器人状态：供各控制任务共享机器人模式与状态；当前启用。 */
 gRobot_t gRobot;
 
+volatile bool  armok = 0;
+volatile bool plateok = 0;
+volatile bool serveok = 0;
+volatile bool legok = 0;
+volatile bool wheelok = 0;
 /* 全局电调输出比较值；由 EscControl 写入 TIM8 通道 4，当前启用。 */
 int esc = 0;
 
@@ -59,9 +72,10 @@ void User_Control_GetDriverMsgsSnapshot(DriverMsgsSnapshot_t *out)
         out->wheel2Msg  = wheel2Msg;
         out->wheel3Msg  = wheel3Msg;
         out->wheel4Msg  = wheel4Msg;
-        out->shoulderMsg  = shoulderMsg;
-        out->elbowMsg  = elbowMsg;
-        out->wristMsg  = wristMsg;
+        out->slideMsg  = slideMsg;
+        out->plateMsg  = plateMsg;
+        out->arm1Msg  = arm1Msg;
+        out->arm2Msg  = arm2Msg;
 		out->tick = (uint32_t)xTaskGetTickCount();
 	}
 	taskEXIT_CRITICAL();
@@ -111,68 +125,32 @@ void RobotInit(void)
     leg4Msg.enable_error = 0;
     leg4Tar.clean = 0;
 
-    wheel1Msg.enableState = DISABLE;
-    wheel1Msg.driverMode  = DISABLE;
-    wheel1Tar.mode = DISABLE;
-    wheel1Tar.last_mode = DISABLE;
-    wheel1Tar.vel_kp = -1;
-    wheel1Tar.last_vel_kp = -1;
-    wheel1Tar.vel_ki = -1;
-    wheel1Tar.last_vel_ki = -1;
-    wheel1Msg.enable_error = 0;
-    wheel1Tar.clean = 0;
 
-    wheel2Msg.enableState = DISABLE;
-    wheel2Msg.driverMode  = DISABLE;
-    wheel2Tar.mode = DISABLE;
-    wheel2Tar.last_mode = DISABLE;
-    wheel2Tar.vel_kp = -1;
-    wheel2Tar.last_vel_kp = -1;
-    wheel2Tar.vel_ki = -1;
-    wheel2Tar.last_vel_ki = -1;
-    wheel2Msg.enable_error = 0;
-    wheel2Tar.clean = 0;
 
-    wheel3Msg.enableState = DISABLE;
-    wheel3Msg.driverMode  = DISABLE;
-    wheel3Tar.mode = DISABLE;
-    wheel3Tar.last_mode = DISABLE;
-    wheel3Tar.vel_kp = -1;
-    wheel3Tar.last_vel_kp = -1;
-    wheel3Tar.vel_ki = -1;
-    wheel3Tar.last_vel_ki = -1;
-    wheel3Msg.enable_error = 0;
-    wheel3Tar.clean = 0;
+    slideMsg.enableState = DISABLE;//AsK
+    slideMsg.driverMode  = POS_MODE;
+    slideTar.mode = POS_MODE;
+    slideTar.last_mode = POS_MODE;
+    slideMsg.enable_error = 0;
+    slideTar.clean = 0;
 
-    wheel4Msg.enableState = DISABLE;
-    wheel4Msg.driverMode  = DISABLE;
-    wheel4Tar.mode = DISABLE;
-    wheel4Tar.last_mode = DISABLE;
-    wheel4Tar.vel_kp = -1;
-    wheel4Tar.last_vel_kp = -1;
-    wheel4Tar.vel_ki = -1;
-    wheel4Tar.last_vel_ki = -1;
-    wheel4Msg.enable_error = 0;
-    wheel4Tar.clean = 0;
+    plateMsg.enableState = DISABLE;
+    plateMsg.driverMode  = POS_MODE;
+    plateTar.mode = POS_MODE;
+    plateTar.last_mode = POS_MODE;
+    plateTar.clean = 0;
 
-    shoulderMsg.enableState = ENABLE;
-    shoulderMsg.driverMode  = POS_MODE;
-    shoulderTar.mode = POS_MODE;
-    shoulderTar.last_mode = POS_MODE;
-    shoulderMsg.enable_error = 0;
-    shoulderTar.clean = 0;
+    arm1Msg.enableState = DISABLE;
+    arm1Msg.driverMode  = POS_MODE;
+    arm1Tar.mode = POS_MODE;
+    arm1Tar.last_mode = POS_MODE;
+    arm1Tar.clean = 0;
 
-    elbowMsg.enableState = ENABLE;
-    elbowMsg.driverMode  = POS_MODE;
-    elbowTar.mode = POS_MODE;
-    elbowTar.last_mode = POS_MODE;
-    elbowTar.clean = 0;
-
-    wristMsg.enableState = ENABLE;
-    wristMsg.driverMode  = POS_MODE;
-    wristTar.mode = POS_MODE;
-    wristTar.last_mode = POS_MODE;
-    wristTar.clean = 0;
+    arm2Msg.enableState = DISABLE;
+    arm2Msg.driverMode  = POS_MODE;
+    arm2Tar.mode = POS_MODE;
+    arm2Tar.last_mode = POS_MODE;
+    arm2Tar.clean = 0;
 }
 
 /**
@@ -191,24 +169,33 @@ void GPIOControl(void)
  * @param driverTarget 驱动器期望
  */
 /* 函数：按目标模式变化切换达妙电机使能状态，否则发送位置/速度目标；当前用于达妙驱动路径。 */
-void DMControl(FDCAN_HandleTypeDef *hfdcan, uint32_t driverNum, motorTarget_t *driverTarget)
+// void DMControl(FDCAN_HandleTypeDef *hfdcan, uint32_t driverNum, motorTarget_t *driverTarget)
+// {
+//     if(driverTarget->mode != driverTarget->last_mode)
+//     {
+//         if(driverTarget->mode == 0)
+//         {
+//             DMDisable(hfdcan, driverNum, DM_POS_MODE);
+//         }
+//         else
+//         {
+//             DMEnable(hfdcan, driverNum, DM_POS_MODE);
+//         }
+//         driverTarget->last_mode = driverTarget->mode;
+//     }
+//     else
+//     {
+//         DMPosCtrl(hfdcan, driverNum, driverTarget->pos, driverTarget->vel);
+//     }
+// }
+
+void ChassisControl(void)
 {
-    if(driverTarget->mode != driverTarget->last_mode)
-    {
-        if(driverTarget->mode == 0)
-        {
-            DMDisable(hfdcan, driverNum, DM_POS_MODE);
-        }
-        else
-        {
-            DMEnable(hfdcan, driverNum, DM_POS_MODE);
-        }
-        driverTarget->last_mode = driverTarget->mode;
-    }
-    else
-    {
-        DMPosCtrl(hfdcan, driverNum, driverTarget->pos, driverTarget->vel);
-    }
+    
+    SteeringWheelCtrl(&hfdcan1, WHEEL1, wheel1Tar.vel, wheel1Tar.pos, wheel1Tar.hsv);
+    SteeringWheelCtrl(&hfdcan1, WHEEL2, wheel3Tar.vel, wheel3Tar.pos, wheel3Tar.hsv);
+    SteeringWheelCtrl(&hfdcan3, WHEEL3, wheel2Tar.vel, wheel2Tar.pos, wheel2Tar.hsv); 
+    SteeringWheelCtrl(&hfdcan3, WHEEL4, wheel4Tar.vel, wheel4Tar.pos, wheel4Tar.hsv);
 }
 
 /**
@@ -327,7 +314,7 @@ void DriverControl(FDCAN_HandleTypeDef *hfdcan, uint32_t driverNum, motorTarget_
                 }
                 else
                 {
-                    PosCtrl(hfdcan, PTP_MODE, driverNum, (int32_t)(driverTarget->pos * 4096.f), driverTarget->pos_kp, driverTarget->pos_kd);
+                    PosCtrl(hfdcan, PTP_MODE, driverNum, driverTarget->pos, driverTarget->pos_kp, driverTarget->pos_kd);
                 }
                 break;
             }
@@ -358,11 +345,12 @@ void HB_Add(void)
     if(HB.wheel2 <= 200)HB.wheel2 ++;
     if(HB.wheel3 <= 200)HB.wheel3 ++;
     if(HB.wheel4 <= 200)HB.wheel4 ++;
-    if(HB.shoulder <= 200)HB.shoulder ++;
-    if(HB.elbow <= 200)HB.elbow ++;
-    if(HB.wrist <= 200)HB.wrist ++;
+    if(HB.slide <= 200)HB.slide ++;
+    if(HB.plate <= 200)HB.plate ++;
+    if(HB.arm1 <= 200)HB.arm1 ++;
+    if(HB.arm2 <= 200)HB.arm2 ++;
 	if(HB.PC <= 200)HB.PC ++;
-    if(HB.op <= 200)HB.op ++;//AsK
+    if(HB.op <= 200)HB.op ++;
 }
 
 /**
@@ -372,62 +360,320 @@ void HB_Add(void)
 /* 函数：轮询四条腿的回零完成标志；旧的直接复位及肘腕回零代码处于注释屏蔽状态。 */
 bool reset_control(void)
 {
-    // static int reset_flag = 0;
-
-	// if(reset_flag == 0)
-	// {
-	// 	ResetDriver(&FDCAN_WL,PTP_MODE,LEG1);
-    //     ResetDriver(&FDCAN_WL,PTP_MODE,LEG2);
-    //     ResetDriver(&FDCAN_WL,PTP_MODE,LEG3);
-    //     ResetDriver(&FDCAN_WL,PTP_MODE,LEG4);
-    //     // SetDriverZero(&FDCAN_TK,PTP_MODE,SHOULDER);
-	// 	reset_flag = 1;
-	// }
-    // else if (reset_flag == 1)
-    // {
-    //     DMEnable(&FDCAN_TK,ELBOW,DM_POS_MODE);
-    //     DMEnable(&FDCAN_TK,WRIST,DM_POS_MODE);
-    //     SetDriverState(&FDCAN_WL, PTP_MODE, WHEEL1, ENABLE);
-    //     SetDriverState(&FDCAN_TK, PTP_MODE, WHEEL2, ENABLE);
-    //     SetDriverState(&FDCAN_WL, PTP_MODE, WHEEL3, ENABLE);
-    //     SetDriverState(&FDCAN_WL, PTP_MODE, WHEEL4, ENABLE);
-    //     SetDriverState(&FDCAN_TK, PTP_MODE, SHOULDER, ENABLE);
-    //     reset_flag = 3;
-    // }
-    // if (reset_flag == 0)
-    // {
-        if(!leg1Msg.reset_pos_ok_flag)IfResetOkFlag(&FDCAN_WL,PTP_MODE,LEG1);
-	    if(!leg2Msg.reset_pos_ok_flag)IfResetOkFlag(&FDCAN_WL,PTP_MODE,LEG2);
-	    if(!leg3Msg.reset_pos_ok_flag)IfResetOkFlag(&FDCAN_WL,PTP_MODE,LEG3);
-	    if(!leg4Msg.reset_pos_ok_flag)IfResetOkFlag(&FDCAN_WL,PTP_MODE,LEG4);
-        // if(!elbowMsg.reset_pos_ok_flag)
-        // {
-        //     DMPosCtrl(&FDCAN_TK,ELBOW,0,0.5);
-        //     if (fabs(elbowMsg.pos) < 0.05)
-        //     {
-        //         elbowMsg.reset_pos_ok_flag = 1;
-        //     }
-        // }
-        // if(!wristMsg.reset_pos_ok_flag)
-        // {
-        //     DMPosCtrl(&FDCAN_TK,WRIST,0,0.5);
-        //     if (fabs(wristMsg.pos) < 0.05)
-        //     {
-        //         wristMsg.reset_pos_ok_flag = 1;
-        //     }
-        // }
-    // }
-    if(leg1Msg.reset_pos_ok_flag && leg2Msg.reset_pos_ok_flag && leg3Msg.reset_pos_ok_flag && leg4Msg.reset_pos_ok_flag)
-        // && elbowMsg.reset_pos_ok_flag && wristMsg.reset_pos_ok_flag
-    // if(elbowMsg.reset_pos_ok_flag && wristMsg.reset_pos_ok_flag)
-    // if (leg1Msg.reset_pos_ok_flag && leg2Msg.reset_pos_ok_flag && leg3Msg.reset_pos_ok_flag && leg4Msg.reset_pos_ok_flag)
+    switch (gRobot.mode)
     {
-        return true;
+        case LEGPVT://都是腿，顺延用
+        case LEGPOSE:
+        {
+            SetDriverState(&hfdcan1, PTP_MODE, LEG1, ENABLE);
+            SetDriverState(&hfdcan1, PTP_MODE, LEG2, ENABLE);
+            SetDriverState(&hfdcan1, PTP_MODE, LEG3, ENABLE);
+            SetDriverState(&hfdcan1, PTP_MODE, LEG4, ENABLE);
+            if(!leg1Msg.reset_pos_ok_flag)IfResetOkFlag(&hfdcan1,PTP_MODE,LEG1);
+            if(!leg2Msg.reset_pos_ok_flag)IfResetOkFlag(&hfdcan1,PTP_MODE,LEG2);
+            if(!leg3Msg.reset_pos_ok_flag)IfResetOkFlag(&hfdcan1,PTP_MODE,LEG3);
+            if(!leg4Msg.reset_pos_ok_flag)IfResetOkFlag(&hfdcan1,PTP_MODE,LEG4);
+            
+            if(leg1Msg.reset_pos_ok_flag && leg2Msg.reset_pos_ok_flag && leg3Msg.reset_pos_ok_flag && leg4Msg.reset_pos_ok_flag)
+            {
+                SetDriverState(&hfdcan1, PTP_MODE, LEG1, DISABLE);
+                SetDriverState(&hfdcan1, PTP_MODE, LEG2, DISABLE);
+                SetDriverState(&hfdcan1, PTP_MODE, LEG3, DISABLE);
+                SetDriverState(&hfdcan1, PTP_MODE, LEG4, DISABLE);
+                return true;
+            }
+            else 
+            {
+                return false;
+            } 
+        }
+        case WHEEL:
+        {
+            // SetDriverState(&hfdcan3, PTP_MODE, WHEEL1, ENABLE);
+            // SetDriverState(&hfdcan3, PTP_MODE, WHEEL2, ENABLE);
+            // SetDriverState(&hfdcan3, PTP_MODE, WHEEL3, ENABLE);
+            // SetDriverState(&hfdcan3, PTP_MODE, WHEEL4, ENABLE);
+            // if(!wheel1Msg.reset_pos_ok_flag)IfResetOkFlag(&FDCAN_WL,PTP_MODE,WHEEL1);
+            // if(!wheel2Msg.reset_pos_ok_flag)IfResetOkFlag(,PTP_MODE,WHEEL2);
+            // if(!wheel3Msg.reset_pos_ok_flag)IfResetOkFlag(&FDCAN_WL,PTP_MODE,WHEEL3);
+            // if(!wheel4Msg.reset_pos_ok_flag)IfResetOkFlag(&FDCAN_WL,PTP_MODE,WHEEL4);
+            
+            // if(wheel1Msg.reset_pos_ok_flag && wheel2Msg.reset_pos_ok_flag && wheel3Msg.reset_pos_ok_flag && wheel4Msg.reset_pos_ok_flag)
+            // {
+            //     return true;
+            // }
+            // else 
+            // {
+            //     return false;
+            // } 
+            return true;
+        }
+        case ARM:
+        {
+            SetDriverState(&hfdcan3, PTP_MODE, ARM1, ENABLE);
+            SetDriverState(&hfdcan3, PTP_MODE, ARM2, ENABLE);
+            if(!slideMsg.reset_pos_ok_flag)IfResetOkFlag(&hfdcan3,PTP_MODE,SLIDE);
+            if(!plateMsg.reset_pos_ok_flag)IfResetOkFlag(&hfdcan3,PTP_MODE, PLATE);
+            if(!arm1Msg.reset_pos_ok_flag)IfResetOkFlag(&hfdcan3,PTP_MODE, ARM1);
+            if(!arm2Msg.reset_pos_ok_flag)IfResetOkFlag(&hfdcan3,PTP_MODE, ARM2);
+            
+            if(slideMsg.reset_pos_ok_flag && plateMsg.reset_pos_ok_flag && arm1Msg.reset_pos_ok_flag && arm2Msg.reset_pos_ok_flag)
+            {
+                return true;
+            }
+            else 
+            {
+                return false;
+            } 
+        }
+        case SLIDE:
+        {
+            SetDriverState(&hfdcan3, PTP_MODE, PLATE, ENABLE);
+            ResetDriver(&hfdcan3, PTP_MODE, PLATE);
+            if(!slideMsg.reset_pos_ok_flag)IfResetOkFlag(&hfdcan3,PTP_MODE,SLIDE);
+            if(slideMsg.reset_pos_ok_flag)
+            {
+                return true;
+            }
+            else 
+            {
+                return false;
+            } 
+        }
+        case PLATE:
+        {
+            SetDriverState(&hfdcan3, PTP_MODE, PLATE, ENABLE);
+            ResetDriver(&hfdcan3, PTP_MODE, PLATE);
+            if(!plateMsg.reset_pos_ok_flag)IfResetOkFlag(&hfdcan3,PTP_MODE, PLATE);
+            
+            if(plateMsg.reset_pos_ok_flag)
+            {
+                return true;
+            }
+            else 
+            {
+                return false;
+            } 
+        }
+        case SERVE:
+        {
+            SetDriverState(&hfdcan3, PTP_MODE, PLATE, ENABLE);
+            SetDriverState(&hfdcan3, PTP_MODE, ARM1, ENABLE);
+            SetDriverState(&hfdcan3, PTP_MODE, ARM2, ENABLE);
+            ResetDriver(&hfdcan3, PTP_MODE, PLATE);
+            if(!plateMsg.reset_pos_ok_flag)IfResetOkFlag(&hfdcan3,PTP_MODE, PLATE);
+            if(!arm1Msg.reset_pos_ok_flag)IfResetOkFlag(&hfdcan3,PTP_MODE, ARM1);
+            if(!arm2Msg.reset_pos_ok_flag)IfResetOkFlag(&hfdcan3,PTP_MODE, ARM2);
+            if(plateMsg.reset_pos_ok_flag && arm1Msg.reset_pos_ok_flag && arm2Msg.reset_pos_ok_flag)
+            {
+                return true;
+            }
+            else 
+            {
+                return false;
+            } 
+        }
+        default:
+        {
+            return false;
+        }
     }
-    else 
+    
+}
+void changeMode()
+{
+    switch (gRobot.mode)
     {
-        return false;
-    } 
+        case LEGPVT:
+        {
+            legok = 0;
+			if(!legok)
+			{	
+				SetDriverMode(&hfdcan3, PTP_MODE , LEG1 , PVT_MODE ,0);
+				SetDriverMode(&hfdcan3, PTP_MODE , LEG2 , PVT_MODE ,0);
+				SetDriverMode(&hfdcan3, PTP_MODE , LEG3 , PVT_MODE ,0);
+				SetDriverMode(&hfdcan3, PTP_MODE , LEG4 , PVT_MODE ,0);
+
+				
+				SetDriverState(&hfdcan3, PTP_MODE, LEG1, ENABLE);
+				SetDriverState(&hfdcan3, PTP_MODE, LEG2, ENABLE);
+				SetDriverState(&hfdcan3, PTP_MODE, LEG3, ENABLE);
+				SetDriverState(&hfdcan3, PTP_MODE, LEG4, ENABLE);
+				
+			}
+			static bool waiting_flag = 0;
+			static uint32_t waiting_cnt = 0;
+			if(!waiting_flag)//不确定必要性
+			{
+				waiting_cnt++;
+				if(waiting_cnt > 100)
+				{
+					waiting_flag = 1;
+				}
+			}
+            else
+            {
+                legok = 1;
+            }
+            break;
+
+        }
+        case LEGPOSE:
+        {
+            legok = 0;
+			if(!legok)
+			{	
+				SetDriverMode(&hfdcan3, PTP_MODE , LEG1 , POS_MODE ,0);
+				SetDriverMode(&hfdcan3, PTP_MODE , LEG2 , POS_MODE ,0);
+				SetDriverMode(&hfdcan3, PTP_MODE , LEG3 , POS_MODE ,0);
+				SetDriverMode(&hfdcan3, PTP_MODE , LEG4 , POS_MODE ,0);
+
+				
+				SetDriverState(&hfdcan3, PTP_MODE, LEG1, ENABLE);
+				SetDriverState(&hfdcan3, PTP_MODE, LEG2, ENABLE);
+				SetDriverState(&hfdcan3, PTP_MODE, LEG3, ENABLE);
+				SetDriverState(&hfdcan3, PTP_MODE, LEG4, ENABLE);
+				
+			}
+			static bool waiting_flag = 0;
+			static uint32_t waiting_cnt = 0;
+			if(!waiting_flag)//不确定必要性
+			{
+				waiting_cnt++;
+				if(waiting_cnt > 100)
+				{
+					waiting_flag = 1;
+				}
+			}
+            else
+            {
+                legok = 1;
+            }
+            break;
+        }
+        case WHEEL:
+        {
+            wheelok = 0;
+			if(!wheelok)
+			{	
+				hsvctrl();
+		        ChassisControl();
+				
+			}
+            /*如果到位了*/
+            // if ()
+            // {
+                    // wheelok = 1;
+            // }
+            break;
+        }
+        case ARM:
+        {
+            armok = 0;
+            PosCtrl(&hfdcan3, PTP_MODE, ARM1, arm1Tar.pos,
+                        1.2f, -1);
+            PosCtrl(&hfdcan3, PTP_MODE, ARM2, arm2Tar.pos,
+                        1.2f, -1);
+        
+            static uint32_t waiting_cnt = 0;
+            if (fabs(arm1Msg.pos - arm1Tar.pos) <=
+                0.02f)
+            {
+                waiting_cnt++;
+                if (waiting_cnt >= 2000)
+                {
+                    waiting_cnt = 2001;
+                    SetBeep(100);
+                    armok = 1;
+                }
+            }
+            break;
+        }
+        case SLIDE:
+        {
+            
+            break;
+        }
+        case PLATE:
+        {
+
+            static bool waiting_flag = 0;
+			static uint32_t waiting_cnt = 0;
+			if(!waiting_flag)
+			{
+				waiting_cnt++;
+				if(waiting_cnt > 1000)
+				{
+					waiting_flag = 1;
+
+				}
+			}
+            else
+            {
+                plateok = 1;
+            }
+            break;
+        }
+        case SERVE:
+        {
+            PosCtrl(&hfdcan3, PTP_MODE, ARM1, arm1Tar.pos,
+                        1.2f, -1);
+            PosCtrl(&hfdcan3, PTP_MODE, ARM2, arm2Tar.pos,
+                        1.2f, -1);
+        
+            static uint32_t waiting_cnt = 0;
+            if (fabs(arm1Msg.pos - arm1Tar.pos) <=
+                0.02f  && fabs(arm2Msg.pos - arm2Tar.pos) <= 0.02f && waiting_cnt != 2001)
+            {
+                waiting_cnt++;
+                if (waiting_cnt >= 2000)
+                {
+                    waiting_cnt = 2001;
+                    SetBeep(100);
+                }
+            }
+            static uint32_t startCount = 0;
+            static uint32_t startok = 0;
+            if (startok == 0)
+            {
+
+                // DEBUG("x %d \r\n",ps_num[3]);
+                if (ps_num[3] == 0)
+                {
+                    startCount++;
+                }
+                else
+                {
+                    startCount = 0;
+                }
+                if (startCount >= 1000)
+                {
+                    startCount = 1001;
+                    SetBeep(400);
+                    startok = 1;
+                }
+            }
+            if (waiting_cnt == 2001  && startok == 1)
+            {
+                static bool waiting_flag = 0;
+                static uint32_t waiting_cnt = 0;
+                if(!waiting_flag)//不确定必要性
+                {
+                    waiting_cnt++;
+                    if(waiting_cnt > 1000)
+                    {
+                        waiting_flag = 1;
+                    }
+                }
+                else
+                {
+                    serveok = 1;
+                }
+            }
+            
+            break;
+        }
+    }
 }
 
 /**
@@ -454,10 +700,57 @@ void EscControl(void)
 //     DriverControl(&FDCAN_WL, LEG3, &leg3Tar, &leg3Msg);
 //     DriverControl(&FDCAN_WL, LEG4, &leg4Tar, &leg4Msg);
 
-//     DriverControl(&FDCAN_TK, SHOULDER, &shoulderTar, &shoulderMsg);
-//     DMControl(&FDCAN_TK, WRIST, &wristTar);
-//     DMControl(&FDCAN_TK, ELBOW, &elbowTar);
+//     DriverControl(&FDCAN_TK, slide, &slideTar, &slideMsg);
+//     DMControl(&FDCAN_TK, arm1, &arm1Tar);
+//     DMControl(&FDCAN_TK, arm2, &arm2Tar);
+//     DMControl(&FDCAN_TK, plate, &plateTar);
 // }
+void MotorControl(void)
+{
+    switch (gRobot.mode)
+    {
+        case LEGPVT:
+        {
+            LegPVTCtrl();
+        }
+        case LEGPOSE:
+        {
+            Leg_PosCtrl();
+            break;
+        }
+        case WHEEL:
+        {
+            hsvctrl();
+		
+            ChassisControl();
+            break;
+        }
+        case ARM:
+        {
+        
+            PosCtrl(&hfdcan3, PTP_MODE, ARM1, arm1Tar.pos, arm1Tar.pos_kp, arm1Tar.pos_kd);
+            PosCtrl(&hfdcan3, PTP_MODE, ARM2, arm2Tar.pos, arm2Tar.pos_kp, arm2Tar.pos_kd);
+            break;
+        }
+        case OSLIDE:
+        {
+            PosCtrl(&hfdcan3, PTP_MODE, SLIDE, slideTar.pos, slideTar.pos_kp, slideTar.pos_kd);
+            break;
+        }
+        case OPLATE:
+        {
+            DriverControl(&hfdcan3, PLATE, &plateTar, &plateMsg);
+            break;
+        }
+        case SERVE:
+        {
+            DriverControl(&hfdcan3, PLATE, &plateTar, &plateMsg);
+            PosCtrl(&hfdcan3, PTP_MODE, ARM1, arm1Tar.pos, arm1Tar.pos_kp, arm1Tar.pos_kd);
+            PosCtrl(&hfdcan3, PTP_MODE, ARM2, arm2Tar.pos, arm2Tar.pos_kp, arm2Tar.pos_kd);
+            break;
+        }
+    }
+}
 
 /* 函数：按顺序发送气阀、GPIO、电机和电调控制；当前机器人控制调度入口。 */
 void RobotControl(void)
