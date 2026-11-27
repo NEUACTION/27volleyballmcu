@@ -15,11 +15,12 @@ extern osThreadId_t user_task;
 /* 外部变量：FreeRTOS 原生任务句柄；当前对应用户任务。 */
 extern TaskHandle_t user_task_handle;
 
-extern volatile bool armok;
-extern volatile bool plateok;
-extern volatile bool serveok;
-extern volatile bool legok;
-extern volatile bool wheelok;
+extern volatile bool firstok;
+// extern volatile bool armok;
+// extern volatile bool plateok;
+// extern volatile bool serveok;
+// extern volatile bool legok;
+// extern volatile bool wheelok;
 
 /* 函数声明：创建并启动用户任务及相关外设任务；系统初始化时调用。 */
 void User_Task_Init(void);

@@ -1,0 +1,6 @@
+# robot:
+#   workStatus: VOIDTASK
+#   ctrlMode: RC_MODE
+#   nowWork: TURNWHEEL
+#   steeringWheelMode: WHEEL_VEL_MODE
+#   isModeSwitchValidFlag: false

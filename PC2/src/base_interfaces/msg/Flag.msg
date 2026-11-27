@@ -1,0 +1,11 @@
+bool get_mcu_error_flag
+bool run_successed_flag
+bool pc_error_flag
+
+bool only_need_start_flag
+
+bool read_ok_flag
+
+bool reset_flag
+
+bool upr1_flag

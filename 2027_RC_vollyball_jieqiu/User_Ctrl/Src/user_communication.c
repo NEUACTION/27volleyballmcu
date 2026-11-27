@@ -584,6 +584,7 @@ void GetPCMsg(const uint8_t *data, uint16_t len)
 	}
 	
 	gRobot.periodCntPC = RX_Data.dataint32[0];//PC运行时间
+
 	leg1Tar.pos = RX_Data.dataf[1];
 	leg1Tar.vel = RX_Data.dataf[2];
 	leg1Tar.tor = RX_Data.dataf[3];
@@ -616,12 +617,11 @@ void GetPCMsg(const uint8_t *data, uint16_t len)
 	leg4Tar.vel_kp = RX_Data.dataf[27];
 	leg4Tar.vel_ki = RX_Data.dataf[28];
 
-	
 	plateTar.vel = RX_Data.dataf[29];
 	plateTar.tor = RX_Data.dataf[30];
 	plateTar.vel_kp = RX_Data.dataf[31];
 	plateTar.vel_ki = RX_Data.dataf[32];
-	
+
 	arm1Tar.pos = RX_Data.dataf[33];
 	arm1Tar.pos_kp = RX_Data.dataf[34];
 	arm1Tar.pos_kd = RX_Data.dataf[35];
@@ -633,9 +633,8 @@ void GetPCMsg(const uint8_t *data, uint16_t len)
 	arm2Tar.pos_kd = RX_Data.dataf[40];
 	arm2Tar.vel_kp = RX_Data.dataf[41];
 	arm2Tar.vel_ki = RX_Data.dataf[42];
-	
-	slideTar.pos = RX_Data.dataf[43];
 
+	slideTar.pos = RX_Data.dataf[43];
 
 	wheel1Tar.pos = RX_Data.dataf[44];
 	wheel1Tar.vel = RX_Data.dataf[45];
@@ -646,14 +645,31 @@ void GetPCMsg(const uint8_t *data, uint16_t len)
 	wheel4Tar.pos = RX_Data.dataf[50];
 	wheel4Tar.vel = RX_Data.dataf[51];
 
-	leg1Tar.mit_kd = RX_Data.dataf[52];
-	leg1Tar.mit_kp = RX_Data.dataf[53];
-	leg2Tar.mit_kd = RX_Data.dataf[54];
-	leg2Tar.mit_kp = RX_Data.dataf[55];
-	leg3Tar.mit_kd = RX_Data.dataf[56];
-	leg3Tar.mit_kp = RX_Data.dataf[57];
-	leg4Tar.mit_kd = RX_Data.dataf[58];
-	leg4Tar.mit_kp = RX_Data.dataf[59];
+	leg1Tar.pos = RX_Data.dataf[52];
+	leg1Tar.vel = RX_Data.dataf[53];
+	leg1Tar.mit_kd = RX_Data.dataf[54];
+	leg1Tar.mit_kp = RX_Data.dataf[55];
+	leg1Tar.tor = RX_Data.dataf[56];
+
+	leg2Tar.pos = RX_Data.dataf[57];
+	leg2Tar.vel = RX_Data.dataf[58];
+	leg2Tar.mit_kd = RX_Data.dataf[59];
+	leg2Tar.mit_kp = RX_Data.dataf[60];
+	leg2Tar.tor = RX_Data.dataf[61];
+
+	leg3Tar.pos = RX_Data.dataf[62];
+	leg3Tar.vel = RX_Data.dataf[63];
+	leg3Tar.mit_kd = RX_Data.dataf[64];
+	leg3Tar.mit_kp = RX_Data.dataf[65];
+	leg3Tar.tor = RX_Data.dataf[66];
+
+	leg4Tar.pos = RX_Data.dataf[67];
+	leg4Tar.vel = RX_Data.dataf[68];
+	leg4Tar.mit_kd = RX_Data.dataf[69];
+	leg4Tar.mit_kp = RX_Data.dataf[70];
+	leg4Tar.tor = RX_Data.dataf[71];
+
+	
 
 
 //原本是71
@@ -699,20 +715,22 @@ void SendPCMsg(void)
 	data[19] = leg3Msg.error;
 	data[20] = leg4Msg.error;
 
-	data[25] = plateMsg.error;
-	data[26] = slideMsg.error;
-	data[27] = arm1Msg.error;
-	data[28] = arm2Msg.error;
-	data[29] = wheel1Msg.status;
-	data[30] = wheel2Msg.status;
-	data[31] = wheel3Msg.status;
-	data[32] = wheel4Msg.status;
+	data[21] = plateMsg.error;
+	data[22] = slideMsg.error;
+	data[23] = arm1Msg.error;
+	data[24] = arm2Msg.error;
 
-	data[33] = legok;//设想用来判断第一阶段是否完成
-	data[34] = wheelok;
-	data[35] = plateok;
-	data[36] = serveok;
-	data[37] = armok;
+	// data[29] = wheel1Msg.status;
+	// data[30] = wheel2Msg.status;
+	// data[31] = wheel3Msg.status;
+	// data[32] = wheel4Msg.status;
+
+	data[25] = firstok;
+	//设想用来判断第一阶段是否完成
+	// data[34] = wheelok;
+	// data[35] = plateok;
+	// data[36] = serveok;
+	// data[37] = armok;
 
 	TX_Data.data_float[1] = leg1Msg.pos;
 	TX_Data.data_float[2] = leg1Msg.vel;
@@ -732,31 +750,31 @@ void SendPCMsg(void)
 
 	TX_Data.data_float[13] = wheel1Msg.pos;
 	TX_Data.data_float[14] = wheel1Msg.vel;
-	TX_Data.data_float[15] = wheel1Msg.vel_cur;
-	TX_Data.data_float[16] = wheel1Msg.pos_cur;
+	TX_Data.data_float[15] = wheel1Msg.pos_cur;
+	TX_Data.data_float[16] = wheel1Msg.vel_cur;
 
 	TX_Data.data_float[17] = wheel2Msg.pos;
 	TX_Data.data_float[18] = wheel2Msg.vel;
-	TX_Data.data_float[19] = wheel2Msg.vel_cur;
-	TX_Data.data_float[20] = wheel2Msg.pos_cur;
+	TX_Data.data_float[19] = wheel2Msg.pos_cur;
+	TX_Data.data_float[20] = wheel2Msg.vel_cur;
 
 	TX_Data.data_float[21] = wheel3Msg.pos;
 	TX_Data.data_float[22] = wheel3Msg.vel;
-	TX_Data.data_float[23] = wheel3Msg.vel_cur;
-	TX_Data.data_float[24] = wheel3Msg.pos_cur;
+	TX_Data.data_float[23] = wheel3Msg.pos_cur;
+	TX_Data.data_float[24] = wheel3Msg.vel_cur;
 
 	TX_Data.data_float[25] = wheel4Msg.pos;
 	TX_Data.data_float[26] = wheel4Msg.vel;
-	TX_Data.data_float[27] = wheel4Msg.vel_cur;
-	TX_Data.data_float[28] = wheel4Msg.pos_cur;
+	TX_Data.data_float[27] = wheel4Msg.pos_cur;
+	TX_Data.data_float[28] = wheel4Msg.vel_cur;
 	
 	TX_Data.data_float[29] = plateMsg.pos;
 	TX_Data.data_float[30] = plateMsg.vel;
 	TX_Data.data_float[31] = plateMsg.currQ;
 	
-	
-	TX_Data.data_float[33] = slideMsg.pos;
-	TX_Data.data_float[34] = slideMsg.vel;
+	TX_Data.data_float[32] = slideMsg.pos;
+	TX_Data.data_float[33] = slideMsg.vel;
+	TX_Data.data_float[34] = slideMsg.currQ;
 
 	TX_Data.data_float[35] = arm1Msg.pos;
 	TX_Data.data_float[36] = arm1Msg.vel;

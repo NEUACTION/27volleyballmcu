@@ -43,12 +43,12 @@ DriverMsgsSnapshot_t driverMsgs;
 
 /* 全局机器人状态：供各控制任务共享机器人模式与状态；当前启用。 */
 gRobot_t gRobot;
-
-volatile bool  armok = 0;
-volatile bool plateok = 0;
-volatile bool serveok = 0;
-volatile bool legok = 0;
-volatile bool wheelok = 0;
+volatile bool firstok = 0;
+// volatile bool  armok = 0;
+// volatile bool plateok = 0;
+// volatile bool serveok = 0;
+// volatile bool legok = 0;
+// volatile bool wheelok = 0;
 /* 全局电调输出比较值；由 EscControl 写入 TIM8 通道 4，当前启用。 */
 int esc = 0;
 
@@ -482,25 +482,26 @@ bool reset_control(void)
 }
 void changeMode()
 {
-    switch (gRobot.mode)
+    if (firstok == 0)
+    {
+            switch (gRobot.mode)
     {
         case LEGPVT:
         {
-            legok = 0;
-			if(!legok)
-			{	
-				SetDriverMode(&hfdcan3, PTP_MODE , LEG1 , PVT_MODE ,0);
-				SetDriverMode(&hfdcan3, PTP_MODE , LEG2 , PVT_MODE ,0);
-				SetDriverMode(&hfdcan3, PTP_MODE , LEG3 , PVT_MODE ,0);
-				SetDriverMode(&hfdcan3, PTP_MODE , LEG4 , PVT_MODE ,0);
+            
+				
+            SetDriverMode(&hfdcan3, PTP_MODE , LEG1 , PVT_MODE ,0);
+            SetDriverMode(&hfdcan3, PTP_MODE , LEG2 , PVT_MODE ,0);
+            SetDriverMode(&hfdcan3, PTP_MODE , LEG3 , PVT_MODE ,0);
+            SetDriverMode(&hfdcan3, PTP_MODE , LEG4 , PVT_MODE ,0);
 
+            
+            SetDriverState(&hfdcan3, PTP_MODE, LEG1, ENABLE);
+            SetDriverState(&hfdcan3, PTP_MODE, LEG2, ENABLE);
+            SetDriverState(&hfdcan3, PTP_MODE, LEG3, ENABLE);
+            SetDriverState(&hfdcan3, PTP_MODE, LEG4, ENABLE);
 				
-				SetDriverState(&hfdcan3, PTP_MODE, LEG1, ENABLE);
-				SetDriverState(&hfdcan3, PTP_MODE, LEG2, ENABLE);
-				SetDriverState(&hfdcan3, PTP_MODE, LEG3, ENABLE);
-				SetDriverState(&hfdcan3, PTP_MODE, LEG4, ENABLE);
-				
-			}
+			
 			static bool waiting_flag = 0;
 			static uint32_t waiting_cnt = 0;
 			if(!waiting_flag)//不确定必要性
@@ -513,28 +514,27 @@ void changeMode()
 			}
             else
             {
-                legok = 1;
+                firstok = 1;
             }
             break;
 
         }
         case LEGPOSE:
         {
-            legok = 0;
-			if(!legok)
-			{	
-				SetDriverMode(&hfdcan3, PTP_MODE , LEG1 , POS_MODE ,0);
-				SetDriverMode(&hfdcan3, PTP_MODE , LEG2 , POS_MODE ,0);
-				SetDriverMode(&hfdcan3, PTP_MODE , LEG3 , POS_MODE ,0);
-				SetDriverMode(&hfdcan3, PTP_MODE , LEG4 , POS_MODE ,0);
+            
+			
+            SetDriverMode(&hfdcan3, PTP_MODE , LEG1 , POS_MODE ,0);
+            SetDriverMode(&hfdcan3, PTP_MODE , LEG2 , POS_MODE ,0);
+            SetDriverMode(&hfdcan3, PTP_MODE , LEG3 , POS_MODE ,0);
+            SetDriverMode(&hfdcan3, PTP_MODE , LEG4 , POS_MODE ,0);
 
+            
+            SetDriverState(&hfdcan3, PTP_MODE, LEG1, ENABLE);
+            SetDriverState(&hfdcan3, PTP_MODE, LEG2, ENABLE);
+            SetDriverState(&hfdcan3, PTP_MODE, LEG3, ENABLE);
+            SetDriverState(&hfdcan3, PTP_MODE, LEG4, ENABLE);
 				
-				SetDriverState(&hfdcan3, PTP_MODE, LEG1, ENABLE);
-				SetDriverState(&hfdcan3, PTP_MODE, LEG2, ENABLE);
-				SetDriverState(&hfdcan3, PTP_MODE, LEG3, ENABLE);
-				SetDriverState(&hfdcan3, PTP_MODE, LEG4, ENABLE);
-				
-			}
+			
 			static bool waiting_flag = 0;
 			static uint32_t waiting_cnt = 0;
 			if(!waiting_flag)//不确定必要性
@@ -547,29 +547,28 @@ void changeMode()
 			}
             else
             {
-                legok = 1;
+                firstok = 1;
             }
             break;
         }
         case WHEEL:
         {
-            wheelok = 0;
-			if(!wheelok)
-			{	
-				hsvctrl();
-		        ChassisControl();
+            
+			
+            hsvctrl();
+            ChassisControl();
 				
-			}
+			
             /*如果到位了*/
             // if ()
             // {
-                    // wheelok = 1;
+                    // firstok = 1;
             // }
             break;
         }
         case ARM:
         {
-            armok = 0;
+            
             PosCtrl(&hfdcan3, PTP_MODE, ARM1, arm1Tar.pos,
                         1.2f, -1);
             PosCtrl(&hfdcan3, PTP_MODE, ARM2, arm2Tar.pos,
@@ -584,7 +583,7 @@ void changeMode()
                 {
                     waiting_cnt = 2001;
                     SetBeep(100);
-                    armok = 1;
+                    firstok = 1;
                 }
             }
             break;
@@ -610,7 +609,7 @@ void changeMode()
 			}
             else
             {
-                plateok = 1;
+                firstok = 1;
             }
             break;
         }
@@ -667,13 +666,15 @@ void changeMode()
                 }
                 else
                 {
-                    serveok = 1;
+                    firstok = 1;
                 }
             }
             
             break;
         }
     }
+    }
+
 }
 
 /**

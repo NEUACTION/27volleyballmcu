@@ -14,9 +14,9 @@ extern "C" {
 /* 宏：USB 接收帧中 uint8_t 项的数量；当前协议解析使用。 */
 #define USB_RX_UINT8_NUM (10)//先留着吧
 /* 宏：USB 接收帧中 32 位数据项数量；当前协议接收布局。 */
-#define USB_RX_DATA_NUM  (54)
+#define USB_RX_DATA_NUM  (73)
 /* 宏：USB 发送帧中 uint8_t 项的数量；当前协议发送布局。 */
-#define USB_TX_UINT8_NUM (37)
+#define USB_TX_UINT8_NUM (25)
 /* 宏：USB 发送帧中 32 位数据项数量；当前协议发送布局。 */
 #define USB_TX_DATA_NUM  (41)//先认为有多少写多少
 

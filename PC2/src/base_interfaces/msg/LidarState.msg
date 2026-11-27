@@ -1,0 +1,2 @@
+int32 field_color
+int32 field_num

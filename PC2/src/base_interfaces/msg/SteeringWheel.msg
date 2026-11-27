@@ -1,0 +1,8 @@
+float32 wheel1_tar_vel
+float32 wheel1_tar_pos
+float32 wheel2_tar_vel
+float32 wheel2_tar_pos
+float32 wheel3_tar_vel
+float32 wheel3_tar_pos
+float32 wheel4_tar_vel
+float32 wheel4_tar_pos

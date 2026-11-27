@@ -1,0 +1,19 @@
+float32 motor_pos
+float32 motor_vel
+float32 motor_pos_kp
+float32 motor_pos_kd
+float32 motor_vel_kp
+float32 motor_vel_ki
+float32 motor_cur
+float32 motor_ex_cur
+uint8 controlmode
+uint8 error
+uint8 enablestate
+float32 motor_vel_limit
+bool clean
+
+float32 mit_pos
+float32 mit_vel
+float32 mit_pos_kd
+float32 mit_vel_kp
+float32 mit_cur
