@@ -12,6 +12,11 @@
 #include "action_planner/fpath.hpp"
 #include "action_planner/kfs.hpp"
 
+namespace
+{
+constexpr double kPi = 3.14159265358979323846;
+}
+
 /*-----------------------------------------------------------------------------*/
 /*******电机相关参数******* */
 float BASE_MOTOR::GetTarVel()
@@ -139,7 +144,7 @@ void BASE_MOTOR::SetActPara(float actvel,float actpos, float acttor)
 float BASE_MOTOR::CalculationTime(float v, float first_pos, float last_pos, float a, float a2)
 {
     float total_distance = fabs(last_pos - first_pos);//总共的路程
-    float const_time = (total_distance - (2 * a * v / PI) - (2 * a2 * v / PI)) / v;//匀速行驶所需的时间
+    float const_time = (total_distance - (2 * a * v / kPi) - (2 * a2 * v / kPi)) / v;//匀速行驶所需的时间
 
     return (const_time + a2 + a); 
 }
@@ -151,13 +156,13 @@ float BASE_MOTOR::QuerySpeed(float v, float first_pos, float last_pos, float a, 
     float current_speed = 0.0;//目前速度
     float distance_covered = 0.0;//目前距离
 
-    float const_time = (total_distance - 2 * a / PI * v - 2 * a2 / PI * v) / v;//匀速行驶所需的时间
+    float const_time = (total_distance - 2 * a / kPi * v - 2 * a2 / kPi * v) / v;//匀速行驶所需的时间
 
     int flag = fabs(last_pos - first_pos) / (last_pos - first_pos);
     if (start_t < a)
     {
         
-        current_speed = v * sin(PI * start_t / (2.0 * a));//t0时候的速度(0~PI/2)
+        current_speed = v * sin(kPi * start_t / (2.0 * a));//t0时候的速度(0~PI/2)
         return current_speed * flag;
     }
   
@@ -168,7 +173,7 @@ float BASE_MOTOR::QuerySpeed(float v, float first_pos, float last_pos, float a, 
     
     else if (start_t > a + const_time && start_t <= a2 + a + const_time)
     {
-        current_speed = v * sin(PI / 2 * (1 - (start_t - (a + const_time)) / a2));
+        current_speed = v * sin(kPi / 2 * (1 - (start_t - (a + const_time)) / a2));
         return current_speed * flag;
     }
     else if (start_t > a2 + a + const_time && start_t <= a2 + a + const_time + 5)
@@ -212,6 +217,3 @@ void WHEEL_MOTOR::SetFeedCurr(float curr)
 {
     tarData.Tor = curr;
 }
-
-
-#endif

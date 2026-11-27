@@ -41,7 +41,7 @@ public:
     uint64_t ppsPeriod;
     Pos_t* pps_data;
 
-    std::string mode;
+    int mode;
     
     bool GetActiveFlag();
     void Publish_control(bool ppsresetflag, bool course, bool zeroflag, bool restartflag);

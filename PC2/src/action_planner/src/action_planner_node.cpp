@@ -12,13 +12,17 @@
 #include "common_logger/common_logger.hpp"
 #include "action_planner/leg.hpp"
 #include "action_planner/wheel_motor.hpp"
-#include "action_planner/trunk.hpp"
+#include "action_planner/sword.hpp"
 
 #include <tf2/LinearMath/Transform.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 
 #include <eigen3/Eigen/Dense>
 #include <iomanip>
+#include <cassert>
+
+
+bool start = 0;
 
 actionPlannerNode::actionPlannerNode(): Node("actionPlannerNode")
 {
@@ -44,8 +48,8 @@ actionPlannerNode::actionPlannerNode(): Node("actionPlannerNode")
                 std::bind(&actionPlannerNode::TlrKFSCallback, this, std::placeholders::_1));
     imu_msg_subscriber = this->create_subscription<base_interfaces::msg::PosData>("/pps_data",10, 
                 std::bind(&actionPlannerNode::PosCallback, this, std::placeholders::_1));
-    grid_zhu_msg_subscriber = this->create_subscription<std_msgs::msg::Int32>("/encoded_grid_pythonqqq", 10, 
-                std::bind(&actionPlannerNode::Grid_zhu_Callback, this, std::placeholders::_1));//10864712
+    // grid_zhu_msg_subscriber = this->create_subscription<std_msgs::msg::Int32>("/encoded_grid_pythonqqq", 10, 
+    //             std::bind(&actionPlannerNode::Grid_zhu_Callback, this, std::placeholders::_1));//10864712
     kfs_num_msg_subscriber = this->create_subscription<std_msgs::msg::Int32>("/selected_value", 10, 
                 std::bind(&actionPlannerNode::KfsNumCallback, this, std::placeholders::_1));
     encoded_grid_publisher_ = this->create_publisher<std_msgs::msg::Int32>("/encoded_grid", 10);
@@ -56,10 +60,7 @@ actionPlannerNode::actionPlannerNode(): Node("actionPlannerNode")
     lyx_publisher = this->create_publisher<base_interfaces::msg::LidarState>("/site", 10);
     
     this->declare_parameter<std::string>("mode", "run");
-
-    // 读取参数
     mode = this->get_parameter("mode").as_string();
-
     assert(mode == "run" || mode == "self-check" || mode == "re_area2" || mode == "re_area3" || mode == "test");
 
     timer_ = this->create_wall_timer(
@@ -228,61 +229,61 @@ void actionPlannerNode::timer_callback()
     time_5msFlag.store(true, std::memory_order_release);
 }
 
-void actionPlannerNode::PublishToYyy(float x, float y, float z, float roll, float pitch, float yaw, bool need_correction)
-{
-    dataToYyy.pose.position.x = x / 1000.0; 
-    dataToYyy.pose.position.y = y / 1000.0; 
-    dataToYyy.pose.position.z = z / 1000.0; 
-    dataToYyy.need_correction = need_correction;
-    dataToYyy.pose.orientation = tf2::toMsg(tf2::Quaternion(tf2::Vector3(1,0,0), roll * M_PI / 180.0) *
-                                            tf2::Quaternion(tf2::Vector3(0,1,0), pitch * M_PI / 180.0) *
-                                            tf2::Quaternion(tf2::Vector3(0,0,1), yaw * M_PI / 180.0));
+// void actionPlannerNode::PublishToYyy(float x, float y, float z, float roll, float pitch, float yaw, bool need_correction)
+// {
+//     dataToYyy.pose.position.x = x / 1000.0; 
+//     dataToYyy.pose.position.y = y / 1000.0; 
+//     dataToYyy.pose.position.z = z / 1000.0; 
+//     dataToYyy.need_correction = need_correction;
+//     dataToYyy.pose.orientation = tf2::toMsg(tf2::Quaternion(tf2::Vector3(1,0,0), roll * M_PI / 180.0) *
+//                                             tf2::Quaternion(tf2::Vector3(0,1,0), pitch * M_PI / 180.0) *
+//                                             tf2::Quaternion(tf2::Vector3(0,0,1), yaw * M_PI / 180.0));
 
-    this->yyy_change_publisher->publish(dataToYyy);
-}
+//     this->yyy_change_publisher->publish(dataToYyy);
+// }
 
-void actionPlannerNode::PublishToLyx()
-{
-    mtx.lock();
-    dataToLyx.field_color = plannerNode->myFlags.RB_flag;
-    dataToLyx.field_num = plannerNode->myFlags.field_num;
-    mtx.unlock();
-    this->lyx_publisher->publish(dataToLyx);
-}
+// void actionPlannerNode::PublishToLyx()
+// {
+//     mtx.lock();
+//     dataToLyx.field_color = plannerNode->myFlags.RB_flag;
+//     dataToLyx.field_num = plannerNode->myFlags.field_num;
+//     mtx.unlock();
+//     this->lyx_publisher->publish(dataToLyx);
+// }
 
-void actionPlannerNode::PublishToLx()
-{
-    mtx.lock();
-    dataToLx.task = plannerNode->lxData.task;
-    mtx.unlock();
-    this->lx_task_publisher->publish(dataToLx);
-}
+// void actionPlannerNode::PublishToLx()
+// {
+//     mtx.lock();
+//     dataToLx.task = plannerNode->lxData.task;
+//     mtx.unlock();
+//     this->lx_task_publisher->publish(dataToLx);
+// }
 
-void actionPlannerNode::PublishToLxChoose()
-{
-    mtx.lock();
-    dataToLxChoose.camera = plannerNode->lxData.mode;
-    mtx.unlock();
-    this->lx_choose_publisher->publish(dataToLxChoose);
-}
+// void actionPlannerNode::PublishToLxChoose()
+// {
+//     mtx.lock();
+//     dataToLxChoose.camera = plannerNode->lxData.mode;
+//     mtx.unlock();
+//     this->lx_choose_publisher->publish(dataToLxChoose);
+// }
 
-void actionPlannerNode::PublishToLxKfs()
-{
-    // this->logger_->info("Send kfs data");
-    mtx.lock();
-    dataToLxKfs.start_test = plannerNode->lxData.start_test;
-    mtx.unlock();
-    this->lx_kfs_publisher->publish(dataToLxKfs);
-}
+// void actionPlannerNode::PublishToLxKfs()
+// {
+//     // this->logger_->info("Send kfs data");
+//     mtx.lock();
+//     dataToLxKfs.start_test = plannerNode->lxData.start_test;
+//     mtx.unlock();
+//     this->lx_kfs_publisher->publish(dataToLxKfs);
+// }
 
-void actionPlannerNode::PublishToLxPosz()
-{
-    // this->logger_->info("Send posz data");
-    mtx.lock();
-    dataTolxposz.z = plannerNode->lxData.lx_posz;
-    mtx.unlock();
-    this->lx_posz_publisher->publish(dataTolxposz);
-}
+// void actionPlannerNode::PublishToLxPosz()
+// {
+//     // this->logger_->info("Send posz data");
+//     mtx.lock();
+//     dataTolxposz.z = plannerNode->lxData.lx_posz;
+//     mtx.unlock();
+//     this->lx_posz_publisher->publish(dataTolxposz);
+// }
 
 void actionPlannerNode::publish_encoded_grid(int32_t encoded_value) 
 {
@@ -334,26 +335,20 @@ void actionPlannerNode::feedback_callback(
 
 void actionPlannerNode::LxCallback(const base_interfaces::msg::Camera::SharedPtr msg)
 {
-    // logger_->info("Received Lx data");
-    mtx.lock();
-    plannerNode->dataFromLx = *msg;
-    mtx.unlock();
+    std::lock_guard<std::mutex> lock(mtx);
+    dataFromLx = *msg;
 }
 
 void actionPlannerNode::KfsCallback(const base_interfaces::msg::CameraKfs::SharedPtr msg)
 {
-    // logger_->info("Received Kfs data");
-    mtx.lock();
-    plannerNode->dataFromLxKfs = *msg;
-    mtx.unlock();
+    std::lock_guard<std::mutex> lock(mtx);
+    dataFromLxKfs = *msg;
 }
 
 void actionPlannerNode::Grid_lx_Callback(const base_interfaces::msg::GridState::SharedPtr msg)
 {
-    // logger_->info("Received grid_lx data");
-    mtx.lock();
-    plannerNode->dataFromLxstate = *msg;
-    mtx.unlock();
+    std::lock_guard<std::mutex> lock(mtx);
+    dataFromLxstate = *msg;
 }
 
 void actionPlannerNode::GridDistancesCallback(const base_interfaces::msg::GridDistances::SharedPtr msg)
@@ -364,49 +359,44 @@ void actionPlannerNode::GridDistancesCallback(const base_interfaces::msg::GridDi
     mtx.unlock();
 }
 
-void actionPlannerNode::Grid_zhu_Callback(const std_msgs::msg::Int32::SharedPtr msg)
-{
-    // logger_->info("Received grid_zhu data");
-    mtx.lock();
-    Grid decoded_result = decode_grid(msg->data);
-    for(int i = 0; i < 4; i++) 
-    {
-        for(int j = 0; j < 3; j++) 
-        {
-            plannerNode->grid.data[i][j] = decoded_result.data[i][j];
-        }
-    }
-    for (int i = 0; i < 4 ; i++)
-    {
-        for (int j = 0; j < 3; j++)
-        {
-            KFS[i * 3 + j] = grid.data[i][j];
-        }
-    }
-    mtx.unlock();
-}
+// void actionPlannerNode::Grid_zhu_Callback(const std_msgs::msg::Int32::SharedPtr msg)
+// {
+//     // logger_->info("Received grid_zhu data");
+//     mtx.lock();
+//     Grid decoded_result = decode_grid(msg->data);
+//     for(int i = 0; i < 4; i++) 
+//     {
+//         for(int j = 0; j < 3; j++) 
+//         {
+//             plannerNode->grid.data[i][j] = decoded_result.data[i][j];
+//         }
+//     }
+//     for (int i = 0; i < 4 ; i++)
+//     {
+//         for (int j = 0; j < 3; j++)
+//         {
+//             KFS[i * 3 + j] = grid.data[i][j];
+//         }
+//     }
+//     mtx.unlock();
+// }
 
 void actionPlannerNode::KfsNumCallback(const std_msgs::msg::Int32::SharedPtr msg)
 {
-    mtx.lock();
-    plannerNode->re_area_num = msg->data;
-    mtx.unlock();
+    std::lock_guard<std::mutex> lock(mtx);
+    re_area_num = msg->data;
 }
 
 void actionPlannerNode::TlrCallback(const base_interfaces::msg::Align::SharedPtr msg)
 {
-    // logger_->info("Received tlr data");
-    mtx.lock();
-    plannerNode->dataFromtlr= *msg;
-    mtx.unlock();
+    std::lock_guard<std::mutex> lock(mtx);
+    dataFromtlr = *msg;
 }
 
 void actionPlannerNode::TlrKFSCallback(const base_interfaces::msg::Pick::SharedPtr msg)
 {
-    // logger_->info("Received tlrkfs data");
-    mtx.lock();
-    plannerNode->dataFromtlrkfs= *msg;
-    mtx.unlock();
+    std::lock_guard<std::mutex> lock(mtx);
+    dataFromtlrkfs = *msg;
 }
 
 void actionPlannerNode::result_callback(const rclcpp_action::ClientGoalHandle<base_interfaces::action::ActionPlan>::WrappedResult& result)
@@ -474,7 +464,7 @@ void actionPlannerNode::LoadToCtrlData()
     plannerGoalToCtrl.tararm2.motor_pos_kd = sword.Arm2.GetTarPos_Kd();
     plannerGoalToCtrl.tararm2.motor_vel_kp = sword.Arm2.GetTarVel_Kp();
     plannerGoalToCtrl.tararm2.motor_vel_ki = sword.Arm2.GetTarVel_Ki();
-    plannerGoalToCtrl.mode = mode;
+    plannerGoalToCtrl.mode = 4;
     plannerGoalToCtrl.start = start;
 }
 
@@ -589,7 +579,7 @@ void actionPlannerNode::odom_callback(const nav_msgs::msg::Odometry::ConstShared
         if(lidar_err_cnt < 1){
             lidar_err_cnt ++;
         }else
-            plannerNode->myFlags.ppsErrorFlag = true;
+            plannerNode->myFlags.pc_error_flag = true;
     }
     plannerNode->lidar_time = msg->header.stamp.nanosec / 1e6f; // 转换为毫秒
     static bool first_odom = true;

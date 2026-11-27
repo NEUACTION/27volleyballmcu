@@ -1,6 +1,6 @@
 #include "action_planner/pathfollow.hpp"
 #define SMALL_VELL (100.f)
-#define MAX_TAR_VEL (5000.f)
+// #define MAX_TAR_VEL (5000.f)
 #define MAX_ADJUST_VEL (850.0f) //500
 
 static uint8_t clearLenFlag = 0;
@@ -159,8 +159,8 @@ int PathFollowing(float percent)
 
 	//速度，角速度赋值
 	carVel.SetVel1(carVel.sum, carVel.dir, carVel.omega);
-	carVel.x = carVel.x + PosControl(plannerNode->tarPos.x, plannerNode->nowPos.x, plannerNode->tarPos.y, plannerNode->nowPos.y, 1.2, 0.2, 1.2, 0.2).x;
-	carVel.y = carVel.y + PosControl(plannerNode->tarPos.x, plannerNode->nowPos.x, plannerNode->tarPos.y, plannerNode->nowPos.y, 1.2, 0.2, 1.2, 0.2).y;
+	carVel.x = carVel.x + PosControl(plannerNode->tarPos.x, plannerNode->nowPos.x, plannerNode->tarPos.y, plannerNode->nowPos.y, 1.2, 0.2, 1.2, 0.2,0).x;
+	carVel.y = carVel.y + PosControl(plannerNode->tarPos.x, plannerNode->nowPos.x, plannerNode->tarPos.y, plannerNode->nowPos.y, 1.2, 0.2, 1.2, 0.2,0).y;
 	plannerNode->tarVel.SetVel2(carVel.x, carVel.y, carVel.omega);
 	// myRobot.VIEW_L = VIEW;							            //提前量
 	// myRobot.virtualPosx = virPosPoint.point.x;		            //虚拟位置点

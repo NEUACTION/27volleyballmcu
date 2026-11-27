@@ -13,7 +13,7 @@
 #define VehicleRadius 342.965f // 轮子距车中心距离
 #define SquareRootOfTwo  1.414213562373095f // 根号2
 #define WheelRadius   101.6f
-#define PI 3.14159265358979323846f
+
 
 ROBOT_MOVEMENT myMovement;
 

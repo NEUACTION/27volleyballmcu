@@ -7,7 +7,8 @@
 CHASSIS Wheel1(0.f,1);
 CHASSIS Wheel2(0.f,2);
 CHASSIS Wheel3(0.f,3);
-Robot_Data myRobotVel;
+CHASSIS Wheel4(0.f,4);
+Robot_Data myRobot;
 
 CHASSIS::CHASSIS(float firstTarPos,int num)
 {
@@ -41,7 +42,7 @@ void CHASSIS::SetTarRunVel(float Tarvel)// r/s
 void CHASSIS::SetTarTurnPos(float TarPos)// r
 {
 
-    if(fabs(TarPos - tar_data.turn_motor_pos) > 1.6f && !control_node->plannerGoalFromPlanner.onlyturnwheelflag)
+    // if(fabs(TarPos - tar_data.turn_motor_pos) > 1.6f && !control_node->plannerGoalFromPlanner.onlyturnwheelflag)//onlyturnwheelflag ???
     {
         if(TarPos > tar_data.turn_motor_pos)                   
         {
@@ -213,7 +214,7 @@ bool OnlyTurnWheelPos(vel carVel, float omg, float angle)
     Wheel1.SetTarRunVel(0.f);
     Wheel2.SetTarRunVel(0.f);
     Wheel3.SetTarRunVel(0.f);
-    control_node->logger()->info("OnlyTurnWheelPos tarAngle: {} {} {} {} {}",Wheel1.GetTarTurnPos(),Wheel2.GetTarTurnPos(),Wheel3.GetTarTurnPos(),carVel.dir,angle);
+    // control_node->logger()->info("OnlyTurnWheelPos tarAngle: {} {} {} {} {}",Wheel1.GetTarTurnPos(),Wheel2.GetTarTurnPos(),Wheel3.GetTarTurnPos(),carVel.dir,angle);//????
 
     //判断是否转到位
     if (fabs(Wheel1.GetActTurnPos() - Wheel1.GetTarTurnPos()) < 0.8f && \

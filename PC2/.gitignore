@@ -1,0 +1,47 @@
+# 编译输出
+build/
+install/
+log/
+
+# ROS2相关
+*.launch.py~
+*.colcon
+
+# 临时文件
+*.swp
+*.swo
+*.tmp
+*.log
+*.bak
+*.pyc
+__pycache__/
+.vscode/
+
+# CMake文件
+CMakeFiles/
+CMakeCache.txt
+Makefile
+cmake_install.cmake
+
+# 排除所有txt文件，但保留CMakeLists.txt
+*.txt
+!CMakeLists.txt
+!*/CMakeLists.txt
+!LICENSE.txt
+
+*.csv
+
+record/
+
+frame/
+frames/
+pcd/
+*.zip
+*.jpg
+*.png
+*.pcd
+*.gv
+*.pdf
+*.bag
+*.mp4
+*.avi

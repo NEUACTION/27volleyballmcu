@@ -2,6 +2,10 @@
 #include "action_planner/frecord.hpp"
 #include "action_planner/action_planner_node.hpp"
 
+namespace
+{
+constexpr double kPi = 3.14159265358979323846;
+}
 
 //方向是正向的轨迹
 std::string_view header = "/* -------- minco ------- */ ";	  //注意末尾還有幾個制表符
@@ -60,7 +64,7 @@ void pathToFollow::IssGetPath(std::istringstream &iss, std::vector<Path_t> &read
 	tmpPath.vx = vx;
 	tmpPath.vy = vy;
 	tmpPath.vel = sqrt(vx * vx + vy * vy);
-	tmpPath.angle = atan2f(-vx,vy) * 180.f / PI;
+	tmpPath.angle = atan2f(-vx,vy) * 180.f / kPi;
 	tmpPath.length = sqrtf((x - lastx) * (x - lastx) + (y - lasty) * (y - lasty)) + lenSum;
 
 
@@ -107,7 +111,7 @@ void pathToFollow::IssGetPath_2(std::istringstream &iss, std::vector<Path_t> &re
 	tmpPath.vx = vx;
 	tmpPath.vy = vy;
 	tmpPath.vel = vsum;
-	tmpPath.angle = atan2f(-vx,vy) * 180.f / PI;
+	tmpPath.angle = atan2f(-vx,vy) * 180.f / kPi;
 	tmpPath.length = sqrtf((x - lastx) * (x - lastx) + (y - lasty) * (y - lasty)) + lenSum;
 
 
@@ -442,7 +446,7 @@ float RollControl(float anglePresent, float angleTarget, float kp, float kd)
 	return adjustVel;
 }
 
-vel_data_t PosControl(float tar_x, float act_x, float tar_y, float act_y, float kp1, float kd1, float kp2, float kd2)
+vel_data_t PosControl(float tar_x, float act_x, float tar_y, float act_y, float kp1, float kd1, float kp2, float kd2, float)
 {
     static float errEngle_x = 0;
 	static float errEngle_y = 0;
@@ -476,7 +480,7 @@ float PlanVel(float v_max, float distance, int cnt)
 
     if (start_t < up_time)
     {      
-        current_speed = v * sin(PI * start_t / (2.0 * up_time));//t0时候的速度(0~PI/2)
+        current_speed = v * sin(kPi * start_t / (2.0 * up_time));//t0时候的速度(0~PI/2)
     }
     else if (start_t >= up_time && start_t <= up_time + const_time)
     {
@@ -484,7 +488,7 @@ float PlanVel(float v_max, float distance, int cnt)
     }
     else if (start_t > up_time + const_time && start_t <= 2 * up_time + const_time)
     {
-        current_speed = v * sin(PI / 2 * (1 - (start_t - (up_time + const_time)) / up_time));
+        current_speed = v * sin(kPi / 2 * (1 - (start_t - (up_time + const_time)) / up_time));
     }
     else if (start_t > 2 * up_time + const_time)
     {

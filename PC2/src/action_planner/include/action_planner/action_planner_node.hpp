@@ -13,6 +13,7 @@
 
 #include <atomic>
 #include <mutex>
+#include <string>
 
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2/LinearMath/Matrix3x3.h>
@@ -48,6 +49,7 @@ using namespace Eigen;
 
 #define YES_R1
 // #define NO_R1
+extern bool start;
 
 class actionPlannerNode: public rclcpp::Node 
 {
@@ -79,34 +81,41 @@ public:
     pos_data_t nowPos;
     pos_data_t tarPos;
     pos_data_t ppsPos;
-    HeartBag heartBags;
-    Lrz lrz;
-    Flag myFlags;
-    pathToFollow mypaths;
-    lx_data_t lxData;
-    zhu_data_t zhuData;
-    Grid grid;
-    tlr_data_t tlrData;
-    tlrkfs_data_t tlrkfsData;
-    R1StarData_t R1StarData;
-
-    string mode;
-
-    base_interfaces::action::ActionPlan::Goal plannerGoalToCtrl;
-    base_interfaces::msg::ActionPlanState feedBackFromCtrl;
+    base_interfaces::msg::HeartBag heartBags;
+    base_interfaces::msg::Flag myFlags;
     base_interfaces::msg::Camera dataFromLx;
     base_interfaces::msg::CameraKfs dataFromLxKfs;
     base_interfaces::msg::GridState dataFromLxstate;
-    base_interfaces::msg::GridDistances dataFromGridDistances;
     base_interfaces::msg::Align dataFromtlr;
-    base_interfaces::msg::CameraTask dataToLx;
-    base_interfaces::msg::CameraChoose dataToLxChoose;
-    base_interfaces::msg::D455Task dataToLxKfs;
-    base_interfaces::msg::PosData posData;
-    base_interfaces::msg::PoseCorrection dataToYyy;
     base_interfaces::msg::Pick dataFromtlrkfs;
-    base_interfaces::msg::D455Posz dataTolxposz;
-    base_interfaces::msg::LidarState dataToLyx;
+    // HeartBag heartBags;
+    // Lrz lrz;
+    // Flag myFlags;
+    pathToFollow mypaths;
+    // lx_data_t lxData;
+    // zhu_data_t zhuData;
+    // Grid grid;
+    // tlr_data_t tlrData;
+    // tlrkfs_data_t tlrkfsData;
+    // R1StarData_t R1StarData;
+
+    std::string mode;
+
+    base_interfaces::action::ActionPlan::Goal plannerGoalToCtrl;
+    base_interfaces::msg::ActionPlanState feedBackFromCtrl;
+    // base_interfaces::msg::Camera dataFromLx;
+    // base_interfaces::msg::CameraKfs dataFromLxKfs;
+    // base_interfaces::msg::GridState dataFromLxstate;
+    base_interfaces::msg::GridDistances dataFromGridDistances;
+    // base_interfaces::msg::Align dataFromtlr;
+    // base_interfaces::msg::CameraTask dataToLx;
+    // base_interfaces::msg::CameraChoose dataToLxChoose;
+    // base_interfaces::msg::D455Task dataToLxKfs;
+    base_interfaces::msg::PosData posData;
+    // base_interfaces::msg::PoseCorrection dataToYyy;
+    // base_interfaces::msg::Pick dataFromtlrkfs;
+    // base_interfaces::msg::D455Posz dataTolxposz;
+    // base_interfaces::msg::LidarState dataToLyx;
 
     void mainThread();
     void LoadToCtrlData();
@@ -158,7 +167,7 @@ private:
     rclcpp::Subscription<base_interfaces::msg::Align>::SharedPtr tlr_msg_subscriber;
     rclcpp::Subscription<base_interfaces::msg::Pick>::SharedPtr tlrkfs_msg_subscriber;
     rclcpp::Subscription<base_interfaces::msg::PosData>::SharedPtr imu_msg_subscriber;
-    rclcpp::Subscription<std_msgs::msg::Int32>::SharedPtr grid_zhu_msg_subscriber;
+    // rclcpp::Subscription<std_msgs::msg::Int32>::SharedPtr grid_zhu_msg_subscriber;
     rclcpp::Subscription<std_msgs::msg::Int32>::SharedPtr kfs_num_msg_subscriber;
     rclcpp::Publisher<base_interfaces::msg::CameraTask>::SharedPtr lx_task_publisher;
     rclcpp::Publisher<base_interfaces::msg::CameraChoose>::SharedPtr lx_choose_publisher;
@@ -179,7 +188,7 @@ private:
     void LxCallback(const base_interfaces::msg::Camera::SharedPtr msg);
     void KfsCallback(const base_interfaces::msg::CameraKfs::SharedPtr msg);
     void Grid_lx_Callback(const base_interfaces::msg::GridState::SharedPtr msg);
-    void Grid_zhu_Callback(const std_msgs::msg::Int32::SharedPtr msg);
+    // void Grid_zhu_Callback(const std_msgs::msg::Int32::SharedPtr msg);
     void KfsNumCallback(const std_msgs::msg::Int32::SharedPtr msg);
     void GridDistancesCallback(const base_interfaces::msg::GridDistances::SharedPtr msg);
 

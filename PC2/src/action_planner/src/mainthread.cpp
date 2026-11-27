@@ -26,7 +26,7 @@
 // 腿部控制定义
 #include "action_planner/wheel_motor.hpp"
 // 轮电机控制定义
-#include "action_planner/trunk.hpp"
+#include "action_planner/sword.hpp"
 // 躯干控制定义
 // ==================== 区域：头文件包含 结束 ====================
 
@@ -76,8 +76,7 @@ void actionPlannerNode::mainThread()
     // // 底盘工作状态设为移动武器
     // plannerNode->mystep = all_leg_down;
     // // 腿部步骤设为全腿放下
-    static bool start = 0;
-    const mode = 4;
+    start = 0;
   }
   // ==================== 区域：按运行模式初始化任务状态：run 结束 ====================
 
@@ -167,22 +166,12 @@ void actionPlannerNode::mainThread()
 
       // ==================== 区域：re_area2 模式等待与初始化 开始 ====================
       if (plannerNode->mode == "re_area2")
-      // 如果当前模式为 re_area2
       {
-      
       }
-      // ==================== 区域：re_area2 模式等待与初始化 结束 ====================
-
-      // ==================== 区域：re_area3 模式等待与初始化 开始 ====================
-      if (plannerNode->mode == "re_area3")
-      // 如果当前模式为 re_area3
-      {
-        
-      }
-      // ==================== 区域：re_area3 模式等待与初始化 结束 ====================
-
-
       // ==================== 区域：启动信号状态机变量 开始 ====================
+      if (plannerNode->mode == "re_area3")
+      {
+      }
       static int start_flag = 0;
       // 启动状态机当前状态
       static int start_cnt = 0;
@@ -195,7 +184,7 @@ void actionPlannerNode::mainThread()
   
 
       // ==================== 区域：等待 reset 就绪 开始 ====================
-      if (!plannerNode->myFlags.readyFlag)
+      if (!plannerNode->myFlags.reset_flag)
       // 如果 reset 就绪标志无效
       {
         plannerNode->logger()->info("waiting for reset...");
@@ -211,6 +200,8 @@ void actionPlannerNode::mainThread()
       {
         AutoCtl();
         // 执行自动控制
+        start = 1;
+        
       }
       // ==================== 区域：自动控制执行 结束 ====================
 
@@ -291,23 +282,23 @@ void CopyData()
   );
   // 设置 Arm2 的实际速度、位置、电流
   // ==================== 区域：拷贝 sword 电机反馈 结束 ====================
-  plannerNode->wheel[1].ActRunVel = plannerNode->feedBackFromCtrl.actwheel1.vel;
-  plannerNode->wheel[1].ActTurnPos = plannerNode->feedBackFromCtrl.actwheel1.pos;
-  plannerNode->wheel[2].ActRunVel = plannerNode->feedBackFromCtrl.actwheel2.vel;
-  plannerNode->wheel[2].ActTurnPos = plannerNode->feedBackFromCtrl.actwheel2.pos;
-  plannerNode->wheel[3].ActRunVel = plannerNode->feedBackFromCtrl.actwheel3.vel;
-  plannerNode->wheel[3].ActTurnPos = plannerNode->feedBackFromCtrl.actwheel3.pos;
-  plannerNode->wheel[4].ActRunVel = plannerNode->feedBackFromCtrl.actwheel4.vel;
-  plannerNode->wheel[4].ActTurnPos = plannerNode->feedBackFromCtrl.actwheel4.pos;
+  wheel[1].ActRunVel = plannerNode->feedBackFromCtrl.actwheel1.vel;
+  wheel[1].ActTurnPos = plannerNode->feedBackFromCtrl.actwheel1.pos;
+  wheel[2].ActRunVel = plannerNode->feedBackFromCtrl.actwheel2.vel;
+  wheel[2].ActTurnPos = plannerNode->feedBackFromCtrl.actwheel2.pos;
+  wheel[3].ActRunVel = plannerNode->feedBackFromCtrl.actwheel3.vel;
+  wheel[3].ActTurnPos = plannerNode->feedBackFromCtrl.actwheel3.pos;
+  wheel[4].ActRunVel = plannerNode->feedBackFromCtrl.actwheel4.vel;
+  wheel[4].ActTurnPos = plannerNode->feedBackFromCtrl.actwheel4.pos;
 
-  plannerNode->wheel[1].TarRunVel = plannerNode->feedBackFromCtrl.tarwheel1.vel;
-  plannerNode->wheel[1].TarTurnPos = plannerNode->feedBackFromCtrl.tarwheel1.pos;
-  plannerNode->wheel[2].TarRunVel = plannerNode->feedBackFromCtrl.tarwheel2.vel;
-  plannerNode->wheel[2].TarTurnPos = plannerNode->feedBackFromCtrl.tarwheel2.pos;
-  plannerNode->wheel[3].TarRunVel = plannerNode->feedBackFromCtrl.tarwheel3.vel;
-  plannerNode->wheel[3].TarTurnPos = plannerNode->feedBackFromCtrl.tarwheel3.pos;
-  plannerNode->wheel[4].TarRunVel = plannerNode->feedBackFromCtrl.tarwheel4.vel;
-  plannerNode->wheel[4].TarTurnPos = plannerNode->feedBackFromCtrl.tarwheel4.pos;
+  wheel[1].TarRunVel = plannerNode->feedBackFromCtrl.tarwheel1.vel;
+  wheel[1].TarTurnPos = plannerNode->feedBackFromCtrl.tarwheel1.pos;
+  wheel[2].TarRunVel = plannerNode->feedBackFromCtrl.tarwheel2.vel;
+  wheel[2].TarTurnPos = plannerNode->feedBackFromCtrl.tarwheel2.pos;
+  wheel[3].TarRunVel = plannerNode->feedBackFromCtrl.tarwheel3.vel;
+  wheel[3].TarTurnPos = plannerNode->feedBackFromCtrl.tarwheel3.pos;
+  wheel[4].TarRunVel = plannerNode->feedBackFromCtrl.tarwheel4.vel;
+  wheel[4].TarTurnPos = plannerNode->feedBackFromCtrl.tarwheel4.pos;
   // ==================== 区域：拷贝心跳包数据 开始 ====================
   plannerNode->heartBags.leg1_hb = plannerNode->feedBackFromCtrl.heartbag.leg1_hb;
   // 拷贝腿 1 心跳包
@@ -347,10 +338,10 @@ void CopyData()
   plannerNode->ppsPos.yaw = plannerNode->posData.yaw;
   // 拷贝 PPS 偏航角
 
-  plannerNode->myFlags.readyFlag = plannerNode->feedBackFromCtrl.mcuflag.reset_flag;
+  plannerNode->myFlags.reset_flag = plannerNode->feedBackFromCtrl.mcuflag.reset_flag;
 
   // 拷贝 reset 就绪标志
-  plannerNode->myFlags.only_need_start_flag = plannerNode->feedBackFromCtrl.mcuflag.only_need_start_flag
+  plannerNode->myFlags.only_need_start_flag = plannerNode->feedBackFromCtrl.mcuflag.only_need_start_flag;
   // ==================== 区域：拷贝 PPS 姿态与 reset 就绪标志 结束 ====================
 
   // ==================== 区域：解析 PS_Num 位状态 开始 ====================

@@ -493,7 +493,7 @@ void mcuNode::ControlListnerCallback(const base_interfaces::msg::McuTransmit::Sh
     // comMCU.txDataStar[13] = '\n';
     for (int i = 2 + TX_UINT8_NUM_STAR; i < RX_FLOAT_NUM_STAR * 4 + 2; i++)
     {
-        comMCU.txDataStar[2 + i] = R1Star_t.datac[i - 2];
+        // comMCU.txDataStar[2 + i] = R1Star_t.datac[i - 2];
     }
 
     this->logger->info("upr1_flag:{}", controlMsg->pcflag.upr1_flag);

@@ -3,7 +3,9 @@
 
 #define VehicleRadius 415.f // 轮子距车中心距离
 #define SquareRootOfTwo  1.414213562373095f // 根号2
-#define PI 3.14159265358979323846f
+#ifndef PI
+#define PI 3.14159265358979323846
+#endif
 //#define CHASSIS_ACC_MAX 0.144 // 轮子加速度极限，单位：转/秒²
 #define CHASSIS_ACC_MAX 0.15
 #define WHEEL_DIAMETER 52.f //轮子直径 mm
@@ -80,6 +82,7 @@ void VelControl(vel actVel);
 extern CHASSIS Wheel1;
 extern CHASSIS Wheel2;
 extern CHASSIS Wheel3;
+extern CHASSIS Wheel4;
 extern Robot_Data myRobot;
 
 #endif

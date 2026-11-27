@@ -8,22 +8,22 @@
 #include <cstdio>
 #include <fstream>
 
-class WHEEL
-{
-public:
-    WHEEL_MOTOR WheelOne;
-    WHEEL_MOTOR WheelTwo;
-    WHEEL_MOTOR WheelThree;
-    WHEEL_MOTOR WheelFour;
+// class WHEEL
+// {
+// public:
+//     WHEEL_MOTOR WheelOne;
+//     WHEEL_MOTOR WheelTwo;
+//     WHEEL_MOTOR WheelThree;
+//     WHEEL_MOTOR WheelFour;
    
-public:
-    WHEEL()
-    : WheelOne(), WheelTwo(), WheelThree(), WheelFour(){}
+// public:
+//     WHEEL()
+//     : WheelOne(), WheelTwo(), WheelThree(), WheelFour(){}
 
-    void SetAllCtrlMode(int tarctrlmode);
-};
+//     void SetAllCtrlMode(int tarctrlmode);
+// };
 
-extern WHEEL wheel;
+// extern WHEEL wheel;
 
 class CHASSIS_MOTOR
 {
@@ -36,5 +36,5 @@ public:
     : TarRunVel(0.0f),TarTurnPos(0.0f),ActRunVel(0.0f),ActTurnPos(0.0f){}
 };
 
-CHASSIS_MOTOR wheel[4];
+extern CHASSIS_MOTOR wheel[5];
 #endif

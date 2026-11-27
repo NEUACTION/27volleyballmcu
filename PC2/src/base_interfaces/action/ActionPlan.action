@@ -16,6 +16,7 @@ Wheelmotor tarwheel4
 
 int32 mode
 bool start
+bool onlyturnwheelflag
 
 Esc taresc1 
 char vavle_num1
@@ -29,6 +30,7 @@ geometry_msgs/Pose cur_pose  # 当前位置
 ---
 # Result: 执行结果
 bool success
+bool onlyturnwheelflag
 string message
 geometry_msgs/Pose final_pose  # 最终到达的位置
 ActionPlanState final_state  # 最终快照（与 Feedback 字段对应）

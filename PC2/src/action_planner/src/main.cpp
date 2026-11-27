@@ -12,14 +12,13 @@
 #include <cstdio>
 #include "rclcpp/executors/multi_threaded_executor.hpp"
 #include "action_planner/action_planner_node.hpp"
-#include "action_planner/robot.hpp"
+// #include "action_planner/robot.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "std_msgs/msg/int32.hpp"
 
 std::shared_ptr<actionPlannerNode> plannerNode;
 
 pathToFollow myPath_R2;
-Flag myflag;
 
 #define RECORD(a,b) recorder1.PushToRecord(a,#b)
 
@@ -43,5 +42,4 @@ int main(int argc, char ** argv)
 
   return 0;
 }
-
 
