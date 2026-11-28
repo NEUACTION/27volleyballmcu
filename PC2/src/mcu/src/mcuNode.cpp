@@ -475,7 +475,7 @@ void mcuNode::ControlListnerCallback(const base_interfaces::msg::McuTransmit::Sh
 
     trans_t.dataf[72]    = controlMsg->mode;
     trans_t.dataf[73]    = controlMsg->start;
-    // logger_->info("Clean:{}", dataToMcu.wheel1.clean);
+    logger_->info("plvel:{}", controlMsg->plate.motor_vel);
     // logger_->info("Clean:{}", controlMsg->wheel1.clean);
 
     for (int i = 0; i < TX_FLOAT_NUM_MCU * 4; i++)

@@ -149,6 +149,8 @@ float BASE_MOTOR::CalculationTime(float v, float first_pos, float last_pos, floa
     return (const_time + a2 + a); 
 }
 
+
+
 float BASE_MOTOR::QuerySpeed(float v, float first_pos, float last_pos, float a, float a2, int cnt)
 {
     float start_t = cnt * 0.005;
@@ -191,7 +193,7 @@ bool BASE_MOTOR::PlanControl(float a, float a2, float v_max, float last_pos, int
     {
         this->first_pos = this->GetActPos();
         this->all_time = this->CalculationTime(v_max, first_pos, last_pos, a, a2);
-        this->SetTarPara(5, first_pos, 0);
+        this->SetTarPara(vel, 0, 0);
         SetCtrlMode(POS_MODE);
     }
 
@@ -212,6 +214,70 @@ bool BASE_MOTOR::PlanControl(float a, float a2, float v_max, float last_pos, int
     }
     return false;
 }
+//zlr
+bool SWORD_MOTOR::PlateCtrlPlan(int tim_cnt)
+
+float BASE_MOTOR::GetAcc(float vlast, float vnext , float s)
+{
+    return ((vnext * vnext) - (vlast * vlast)) / 2 /s;
+}
+
+float BASE_MOTOR::GetTimeAtAV(float vlast, float vnext , float a)
+{
+    return (vnext - vlast) /a;
+}
+float BASE_MOTOR::GetTimeAtSV(float s, float v)
+{
+    return s / v;
+}
+
+float SWORD_MOTOR::PlateVelPlan( float v_max,float s1, float s2 , float s3 , float s4 , int tim_cnt , float *kp, float *ki)
+{
+ 
+     float targetVelocity = v_max; // 期望转速 r/s
+    // float s1 = 0.7f;
+    // float s2 = 2.1f;
+    // float s3 = 1.2f;
+    // float s4 = 1.8f;
+    // float vel= 0.0f;
+    float a1 = this->GetAcc(0, targetVelocity, s1);
+    float a2 = this->GetAcc(targetVelocity, 0, s1);
+    float deltT1 = this->GetTimeAtAV(0, targetVelocity, a1);
+    float deltT5 = this->GetTimeAtAV(targetVelocity, 0, a2);
+    float deltT2 = this->GetTimeAtSV((s3 - s1), targetVelocity);
+    float deltT3 = this->GetTimeAtSV((s4 - s3), (targetVelocity / 4 * 3));
+    float deltT4 = this->GetTimeAtSV((s2 - s4), targetVelocity);
+    float t1 = deltT1;
+    float t2 = deltT2 + deltT1;
+    float t3 = deltT2 + deltT1 + deltT3;
+    float t4 = deltT2 + deltT1 + deltT3 + deltT4;
+    float t5 = deltT2 + deltT1 + deltT3 + deltT4 + deltT5;
+    if (t <= plate.t1)
+    {
+        vel = a1 * t;
+        *ki = 1.0f;
+        *kp = 1.0f;
+    }
+    else if (t <= plate.t4)
+    {
+        vel = targetVelocity;
+        *ki = 1.0f;
+        *kp = 1.0f;
+    }
+    else if (t <= plate.t5)
+    {
+        vel = targetVelocity + a2 * (t - plate.t4);
+        *ki = 1.0f;
+        *kp = 1.0f;
+    }
+    else
+    {
+        vel = 0.0f;
+        *ki = 1.0f;
+        *kp = 1.0f;
+    }
+}
+
 
 void WHEEL_MOTOR::SetFeedCurr(float curr)
 {

@@ -94,6 +94,10 @@ public:
     float QuerySpeed(float v, float first_pos, float last_pos, float a, float a2, int cnt);
     bool PlanControl(float a, float a2, float v_max, float last_pos, int tim_cnt);
 
+    float GetAcc(float vlast, float vnext , float s);
+    float GetAcc(float vlast, float vnext , float s);
+    float GetTimeAtAV(float vlast, float vnext , float a);
+    float GetTimeAtSV(float s, float v);
     bool IsArrive()
     {
         return (fabs(this->GetActPos() - this->GetTarPos()) < 1.f ? 1 : 0);
@@ -111,11 +115,13 @@ public:
     LEG_MOTOR() :BASE_MOTOR() {}
 };
 
-//大象鼻子电机类
+//电机类
 class SWORD_MOTOR : public BASE_MOTOR
 {
 public:
     float SpeedAdjust(float adjust);
+    float PlateVelPlan( float v_max, float s1, float s2 , float s3 , float s4 , int tim_cnt , float *kp, float *ki);
+    bool PlateCtrlPlan(int tim_cnt);
     int vel_limit;
 
 public:

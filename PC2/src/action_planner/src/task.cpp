@@ -27,10 +27,13 @@ void UpperTask()
         {
             if (true)
             {
-                
+                static int t = 0;
+                float t1 = t * 0.005;
+                t++;
+                float vel = sword.Plate.PlateVelPlan( 37, 0.7,  2.1,  1.2,  1.8, t1, &kp, &ki);
                 sword.Plate.SetTarVelKpKi(1, 1);
-                sword.Plate.SetTarPara(10, 0, 0);
-                plannerNode->logger()->info("{}", sword.Plate.GetTarVel()); // 注意：原代码此处是 word，可能也是笔误，保留原样
+                sword.Plate.SetTarPara(10, 0, 0);//vel,0,0
+                plannerNode->logger()->info("{}", sword.Plate.GetTarVel()); 
             }
             break;
         }
